@@ -4,7 +4,7 @@ export const savedPersona = candidate.extend({id:z.string().uuid(),createdAt:z.s
 export type SavedPersona = z.infer<typeof savedPersona>;
 export function profileKey(raw:string):string {
  const u=new URL(raw);
- if(u.protocol!=='https:' || u.hostname!=='www.linkedin.com' || !/^\/in\/[^/]+\/?$/.test(u.pathname) || u.search || u.hash) throw new Error('Enter a LinkedIn profile URL like https://www.linkedin.com/in/name/');
+ if(u.protocol!=='https:' || u.hostname!=='www.linkedin.com' || u.username || u.password || u.port || !/^\/in\/[^/]+\/?$/.test(u.pathname) || u.search || u.hash) throw new Error('Enter a LinkedIn profile URL like https://www.linkedin.com/in/name/');
  return `profile:${u.pathname.replace(/\/$/,'').toLowerCase()}`;
 }
 export async function loadPersonas(url:string):Promise<SavedPersona[]> {
