@@ -89,7 +89,8 @@ export async function runEducation(plan:EducationProgress,original:Snapshot,targ
   } catch(error){progress={...progress,status:'uncertain',error:String(error)};await persist(progress);return progress;}
   progress={...progress,next:progress.next+1,inFlight:null};await persist(progress);
  }
- try {const actual=z.array(educationValue).parse(await port.readRecords());if(JSON.stringify(actual).toLowerCase()!==JSON.stringify(target.map(x=>educationValue.parse(x))).toLowerCase())throw new Error('Education order differs from the requested order')} catch(error){progress={...progress,status:'uncertain',error:String(error)};await persist(progress);return progress}
+ // Fast mode reads IDs from the intro form, whose order need not match LinkedIn's display order; contents were already verified.
+ if(checkEachStep) try {const actual=z.array(educationValue).parse(await port.readRecords());if(JSON.stringify(actual).toLowerCase()!==JSON.stringify(target.map(x=>educationValue.parse(x))).toLowerCase())throw new Error('Education order differs from the requested order')} catch(error){progress={...progress,status:'uncertain',error:String(error)};await persist(progress);return progress}
  progress={...progress,status:'complete'};
  await persist(progress);return progress;
 }

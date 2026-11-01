@@ -21,7 +21,7 @@ export const liveCaptureSources:CaptureSources={
  owner:resolveOwnProfile,
  intro:readIntroValues,
  async about(){const result=await scanAbout(blank);return {profileUrl:result.profileUrl,about:result.content.about}},
- async education(){const result=await scanEducation(blank);return {profileUrl:result.profileUrl,records:result.educationRecords,listComplete:result.listComplete}}
+ async education(){const result=await scanEducation(blank,undefined,undefined,{background:true});return {profileUrl:result.profileUrl,records:result.educationRecords,listComplete:result.listComplete}}
 };
 /** Capture twice and refuse to save a snapshot if ownership, content, or evidence changes. */
 export async function captureSnapshot(profileUrl:string,sources:CaptureSources=liveCaptureSources,options:{passes?:1|2}={}):Promise<Snapshot>{

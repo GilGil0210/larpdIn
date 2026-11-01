@@ -8,7 +8,7 @@ import {persistEducationProgress} from '../educationProgress';
 const blank:Profile={headline:'',location:'',industry:'',about:'',education:[]};
 const canonical=(items:EducationValue[])=>items.map(x=>JSON.stringify(educationValue.parse(x)).toLowerCase());
 async function checkOwner(owner:string){assertOwner(await resolveOwnProfile(),owner)}
-async function scan(owner:string){const result=await scanEducation(blank);assertOwner(result.profileUrl,owner);return result.educationRecords}
+async function scan(owner:string){const result=await scanEducation(blank,undefined,undefined,{background:true});assertOwner(result.profileUrl,owner);return result.educationRecords}
 async function open(owner:string,path:string):Promise<number>{
  const url=new URL(path,owner),tab=await chrome.tabs.create({url:url.href,active:false});if(tab.id===undefined)throw new Error('Could not open education editor');const id=tab.id;
  try{const end=Date.now()+15000;let last:unknown;while(Date.now()<end){try{const state=await chrome.tabs.get(id);if(state.status==='complete'&&state.url&&new URL(state.url).pathname.replace(/\/$/,'')===url.pathname.replace(/\/$/,'')){await chrome.scripting.executeScript({target:{tabId:id},files:['editBridge.js']});return id}}catch(error){last=error}await new Promise(resolve=>setTimeout(resolve,250))}throw new Error(`Education editor did not load${last instanceof Error?`: ${last.message}`:''}`)}catch(error){await chrome.tabs.remove(id).catch(()=>{});throw error}
