@@ -35,7 +35,7 @@ async function waitFor<T>(tabId:number,read:()=>Promise<T>,timeoutMs:number):Pro
  throw new Error(`Could not scan About${error instanceof Error?`: ${error.message}`:''}`);
 }
 /** The caller receives partial profile content, never a restoration snapshot. */
-export async function scanAbout(current:Profile,timeoutMs=15000):Promise<{profileUrl:string;content:Profile}> {
+export async function scanAbout(current:Profile,timeoutMs=30000):Promise<{profileUrl:string;content:Profile}> {
  const owner=await resolveOwnProfile();const tab=await chrome.tabs.create({url:owner,active:false});
  if(tab.id===undefined)throw new Error('Could not open LinkedIn profile');const id=tab.id;
  try {

@@ -4,7 +4,7 @@ import {resolveOwnProfile,assertOwner} from './ownership';
 import type {Profile} from './contract';
 
 /** Read the signed-in user's intro in a temporary tab. This is not a complete profile scan. */
-export async function scanIntro(current:Profile,timeoutMs=15000):Promise<{profileUrl:string;content:Profile}> {
+export async function scanIntro(current:Profile,timeoutMs=30000):Promise<{profileUrl:string;content:Profile}> {
  const owner=await resolveOwnProfile();
  const editor=new URL('edit/intro/',owner).href;
  const tab=await chrome.tabs.create({url:editor,active:false});

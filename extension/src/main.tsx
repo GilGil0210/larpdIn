@@ -42,9 +42,9 @@ function App(){
   if(!profileUrl)return;
   let key:string;try{key=`switch-job:${profileKey(profileUrl)}`}catch{return}
   let cancelled=false;
-  const refresh=async()=>{const job=(await chrome.storage.local.get(key))[key];if(cancelled||!job)return;setSwitching(job.status==='running');setScanStatus(job.status==='complete'?'Switch verified':job.status==='failed'||job.status==='interrupted'?'Switch stopped':job.message||'');if(job.status==='failed'||job.status==='interrupted')setError(job.message||'Switch stopped');try{const op=await loadOperation(profileUrl);if(cancelled)return;setCurrentOperation(op);setEducationProgress(op?await loadEducationProgress(profileUrl,op.id):null)}catch(e){if(!cancelled)setError(String(e))}};
+  const refresh=async(showFinished=true)=>{const job=(await chrome.storage.local.get(key))[key];if(cancelled||!job)return;setSwitching(job.status==='running');if(showFinished||job.status==='running'){setScanStatus(job.status==='complete'?'Switch verified':job.status==='failed'||job.status==='interrupted'?'Switch stopped':job.message||'');if(job.status==='failed'||job.status==='interrupted')setError(job.message||'Switch stopped')}try{const op=await loadOperation(profileUrl);if(cancelled)return;setCurrentOperation(op);setEducationProgress(op?await loadEducationProgress(profileUrl,op.id):null)}catch(e){if(!cancelled)setError(String(e))}};
   const listener=(changes:Record<string,chrome.storage.StorageChange>,area:string)=>{if(area==='local'&&(changes[key]||Object.keys(changes).some(k=>k.startsWith(`operation:${profileKey(profileUrl)}`)||k.startsWith(`education-progress:${profileKey(profileUrl)}:`))))void refresh()};
-  chrome.storage.onChanged.addListener(listener);void chrome.runtime.sendMessage({type:'worker-ready'}).then(refresh).catch(()=>refresh());return()=>{cancelled=true;chrome.storage.onChanged.removeListener(listener)};
+  chrome.storage.onChanged.addListener(listener);void chrome.runtime.sendMessage({type:'worker-ready'}).then(()=>refresh(false)).catch(()=>refresh(false));return()=>{cancelled=true;chrome.storage.onChanged.removeListener(listener)};
  },[profileUrl]);
  async function applyCandidate(item:unknown){
   if(switching)return;setSwitching(true);setError('');setScanStatus('Checking your LinkedIn profile');
