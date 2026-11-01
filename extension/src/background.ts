@@ -6,7 +6,8 @@ import {loadOperation} from './operation';
 import {classifyBlocker} from './blockers';
 import {reconcileWorkerJobs} from './workerRecovery';
 
-chrome.sidePanel.setPanelBehavior({openPanelOnActionClick:true});
+// The toolbar button opens the demo popup (popup.html); the full developer panel stays at index.html.
+void chrome.sidePanel?.setPanelBehavior?.({openPanelOnActionClick:false})?.catch?.(()=>{});
 const restricted=Promise.all([chrome.storage.session.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'}),chrome.storage.local.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'})]);
 
 const command=z.object({type:z.literal('start-switch'),profileUrl:z.string(),selection:z.discriminatedUnion('kind',[
