@@ -41,5 +41,5 @@ export async function captureSnapshot(profileUrl:string,sources:CaptureSources=l
  const first=await collect(),second=await collect();assertOwner(await sources.owner(),owner);
  if(JSON.stringify(first)!==JSON.stringify(second))throw new Error('Profile changed during snapshot capture');
  const content:Profile={headline:first.intro.headline,location:first.intro.city||first.intro.country,industry:first.intro.industry,about:first.about,education:first.records.map(({school,degree,fieldOfStudy,startYear,endYear,grade,activities,description})=>({school,degree,fieldOfStudy,startYear,endYear,grade,activities,description}))};
- return snapshot.parse({profileUrl:owner,capturedAt:new Date().toISOString(),content,introDetails:first.intro,educationRecordIds:first.records.map(record=>record.id),educationRecords:first.records,ownershipVerified:true,introCaptured:true,aboutCaptured:true,educationListCaptured:true});
+ return snapshot.parse({schemaVersion:1,profileUrl:owner,capturedAt:new Date().toISOString(),content,introDetails:first.intro,educationRecordIds:first.records.map(record=>record.id),educationRecords:first.records,ownershipVerified:true,introCaptured:true,aboutCaptured:true,educationListCaptured:true});
 }

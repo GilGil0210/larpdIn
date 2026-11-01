@@ -26,3 +26,4 @@ it('reads a running operation without changing its checkpoint', async()=>{
  } finally {Object.assign(globalThis,{chrome:old})}
 });
 it('blocks legacy empty About snapshots and empty targets until section presence can be restored',()=>{const empty={...original,content:{...content,about:''}};expect(()=>createOperation(original.profileUrl,content,empty)).toThrow('absent About');expect(()=>createOperation(original.profileUrl,{...content,about:''},original)).toThrow('empty About')});
+it('accepts legacy snapshots while rejecting unknown snapshot versions',()=>{expect(snapshot.safeParse(original).success).toBe(true);expect(snapshot.safeParse({...original,schemaVersion:2}).success).toBe(false)});
