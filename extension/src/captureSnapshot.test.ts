@@ -1,0 +1,9 @@
+import {it,expect,vi} from 'vitest';
+import {captureSnapshot,type CaptureSources} from './captureSnapshot';
+const url='https://www.linkedin.com/in/example/';
+const intro={firstName:'A',lastName:'B',additionalName:'',pronouns:'',education:'',headline:'Student',country:'Canada',city:'Toronto',industry:'Tech'};
+const record={id:'1',school:'School',degree:'',fieldOfStudy:'',startYear:2020,endYear:null,startMonth:9,endMonth:null,grade:'',activities:'',description:'',skills:[],media:[],attachmentsInspected:true};
+const sources=():CaptureSources=>({owner:async()=>url,intro:async()=>intro,about:async()=>({profileUrl:url,about:'About'}),education:async()=>({profileUrl:url,records:[record],listComplete:true})});
+it('captures complete evidence twice before producing a snapshot',async()=>{const api=sources();const reader=vi.spyOn(api,'education');const result=await captureSnapshot(url,api);expect(reader).toHaveBeenCalledTimes(2);expect(result).toMatchObject({content:{headline:'Student',location:'Toronto',about:'About'},educationRecordIds:['1'],educationRecords:[{startMonth:9}]})});
+it('rejects incomplete evidence and changing records',async()=>{const api=sources();api.education=async()=>({profileUrl:url,records:[record],listComplete:false});await expect(captureSnapshot(url,api)).rejects.toThrow('completeness');let calls=0;api.education=async()=>({profileUrl:url,records:[{...record,grade:String(++calls)}],listComplete:true});await expect(captureSnapshot(url,api)).rejects.toThrow('changed during')});
+it('rejects an account change and uninspected attachments',async()=>{const api=sources();api.education=async()=>({profileUrl:url,records:[{...record,attachmentsInspected:false}],listComplete:true});await expect(captureSnapshot(url,api)).rejects.toThrow('attachment');api.education=async()=>({profileUrl:'https://www.linkedin.com/in/other/',records:[],listComplete:true});await expect(captureSnapshot(url,api)).rejects.toThrow()});
