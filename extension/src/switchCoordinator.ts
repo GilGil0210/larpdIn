@@ -2,6 +2,7 @@ import {createOperation,loadOperation,persistOperation,recover,type Operation,ty
 import {loadHistory,saveOriginal,commitSwitch,commitRestore} from './history';
 import {profileKey} from './storage';
 import {interruptEducationProgress} from './educationProgress';
+import {reconcileSnapshot} from './reconciliation';
 import {snapshot,type Snapshot} from './snapshot';
 import {runOperation,type SectionAdapter} from './runner';
 import {candidate} from './contract';
@@ -46,6 +47,8 @@ export async function restoreInterrupted(profileUrl:string,deps:SwitchDependenci
   const history=await loadHistory(profileUrl);if(!history)throw new Error('Original snapshot is missing');
   const current=snapshot.parse(await deps.capture(profileUrl));
   if(profileKey(current.profileUrl)!==profileKey(profileUrl))throw new Error('Captured profile does not match the requested profile');
+  const reconciliation=reconcileSnapshot(previous,current);
+  await chrome.storage.local.set({[`reconciliation:${profileKey(profileUrl)}:${previous.id}`]:reconciliation});
   const destination=history.original;
   const op=createOperation(profileUrl,destination.content,current,{destination,personaId:null,recoveryOf:previous.id});
   // The old checkpoint must survive even if a new attempt is interrupted.

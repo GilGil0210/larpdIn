@@ -50,7 +50,7 @@ export async function selectAutocomplete(field:TextControl,value:string,timeoutM
  const deadline=Date.now()+timeoutMs;
  while(Date.now()<deadline){
   const list=field.ownerDocument.getElementById(listId);
-  const matches=list ? Array.from(list.querySelectorAll<HTMLElement>('[role="option"]')).filter(el=>normalize(el.textContent || '')===normalize(value) && el.getAttribute('aria-disabled')!=='true' && !el.hidden) : [];
+  const matches=list ? Array.from(list.querySelectorAll<HTMLElement>('[role="option"]')).filter(el=>normalize(el.textContent || '')===normalize(value) && el.getAttribute('aria-disabled')!=='true' && !el.hidden && !el.closest('[aria-hidden="true"], [hidden]') && el.getClientRects().length>0 && view.getComputedStyle(el).visibility!=='hidden') : [];
   if(matches.length>1) throw new Error(`Ambiguous suggestion: ${value}`);
   if(matches.length===1){
    matches[0].click();

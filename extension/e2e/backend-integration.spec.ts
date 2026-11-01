@@ -23,8 +23,7 @@ test('unpacked extension works with the backend contract',async()=>{
   await expect(page.getByRole('heading',{name:'Candidate 3'}).or(page.getByRole('alert'))).toBeVisible({timeout:120000});
   if(await page.getByRole('alert').isVisible())throw new Error(`Generation failed: ${await page.getByRole('alert').textContent()}`);
   const first=page.getByRole('region',{name:'Candidate 1'});
-  await expect(first.getByLabel('Location')).toHaveValue(/Toronto/i);
-  await expect(first.getByLabel('School').first()).toHaveValue(/University of Toronto/i);
+  for(let i=1;i<=3;i++){const option=page.getByRole('region',{name:`Candidate ${i}`});await expect(option.getByLabel('Location')).toHaveValue(/Toronto/i);await expect(option.getByLabel('School').first()).toHaveValue(/University of Toronto/i)}
   const name=await first.getByLabel('Persona name',{exact:true}).inputValue();
   await first.getByRole('button',{name:'Save candidate'}).click();
   await expect(page.getByRole('heading',{name,exact:true})).toBeVisible();

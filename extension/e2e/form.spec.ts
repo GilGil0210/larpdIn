@@ -96,3 +96,14 @@ test('collection traversal expands load-more and rejects unresolved pagination a
  expect(await page.evaluate(educationListIsComplete)).toBe(false);expect(await page.evaluate(advanceEducationCollection)).toBe(true);expect(await page.evaluate(educationListIsComplete)).toBe(true);
  await page.locator('main').evaluate(el=>el.insertAdjacentHTML('beforeend','<div aria-busy="true"></div>'));expect(await page.evaluate(educationListIsComplete)).toBe(false);
 });
+
+test('collection discovery deduplicates links to one record and rejects ambiguous controls',async({page})=>{
+ await page.route('https://www.linkedin.com/**',route=>route.fulfill({contentType:'text/html',body:'<main><div role="list"><div role="listitem" aria-setsize="1" aria-posinset="1"><a href="/in/example/details/education/edit/forms/1/">Record</a><a href="/in/example/details/education/edit/forms/1/?tracking=yes">Edit</a></div></div><button>Load more</button><button>Show more</button></main>'}));
+ await page.goto('https://www.linkedin.com/in/example/details/education/');const {findEducationEditors,advanceEducationCollection}=await import('../src/scanEducation');expect(await page.evaluate(findEducationEditors)).toHaveLength(1);await expect(page.evaluate(advanceEducationCollection)).rejects.toThrow(/ambiguous/);
+});
+
+test('autocomplete ignores hidden matches and other fields suggestion lists',async({page})=>{
+ await page.setContent('<label>School<input aria-controls="owned"></label><div id="owned"><div role="option" style="display:none">Example University</div><div role="option" id="visible">Example University</div></div><div id="other"><div role="option">Example University</div></div>');
+ await page.locator('#visible').evaluate(el=>el.addEventListener('click',()=>{const input=document.querySelector('input')!;input.value='Example University';input.setAttribute('aria-expanded','false')}));
+ await page.evaluate(async()=>{const {findField,selectAutocomplete}=await import('/src/form.ts');await selectAutocomplete(findField(document,'School'),'Example University',500)});await expect(page.getByLabel('School')).toHaveValue('Example University');
+});

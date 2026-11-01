@@ -51,7 +51,9 @@ async function run(input:Command,key:string):Promise<void>{
    } else selection=input.selection;
    result=await executeSwitch(input.profileUrl,selection,liveSwitch);
   }
-  await chrome.storage.local.set({[key]:{status:result.status==='complete'?'complete':'failed',message:result.error||`Switch ${result.status}`,operationId:result.id,finishedAt:new Date().toISOString(),...(result.error?{blocker:classifyBlocker(result.error)}:{})}});
+  let message=result.error||`Switch ${result.status}`;
+  if(result.recoveryOf){const reconciliationKey=`reconciliation:${profileKey(input.profileUrl)}:${result.recoveryOf}`;const observation=(await chrome.storage.local.get(reconciliationKey))[reconciliationKey];if(observation?.outcome)message+=`. Previous operation: ${observation.outcome==='unchanged'?'no content changes observed':observation.outcome==='target-content-observed'?'target content observed but not independently verified':'profile changes observed'}`;}
+  await chrome.storage.local.set({[key]:{status:result.status==='complete'?'complete':'failed',message,operationId:result.id,finishedAt:new Date().toISOString(),...(result.error?{blocker:classifyBlocker(result.error)}:{})}});
  } catch(error){const message=error instanceof Error?error.message:String(error);await chrome.storage.local.set({[key]:{status:'failed',message,finishedAt:new Date().toISOString(),blocker:classifyBlocker(message)}})}
  finally {active.delete(key)}
 }

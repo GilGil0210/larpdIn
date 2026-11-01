@@ -8,9 +8,9 @@ LinkedIn's observed education overview uses lazy-mounted entries without a relia
 
 ## Backend integration
 
-For a local real-provider run, set `GEMINI_API_KEY`, `DEMO_ACCESS_TOKEN`, `LLM_PROVIDERS=gemini`, and `GEMINI_MODEL=gemini-3.5-flash` in the Git-ignored `backend/.env` file. From `backend/`, run `npm ci`, `npm run build`, and `node --env-file=.env dist/server.js`. Use `http://localhost:3000` and the same demo token in the extension settings. Check Gemini with `node --env-file=.env --import tsx scripts/verify-llm.ts gemini`; this consumes API quota. Never put provider keys into the extension. The Render blueprint still defaults to Featherless first: set `LLM_PROVIDERS=gemini` and `GEMINI_MODEL=gemini-3.5-flash` in Render before using that deployment, and verify the deployed endpoint.
+For a local real-provider run, set `GEMINI_API_KEY`, `DEMO_ACCESS_TOKEN`, `LLM_PROVIDERS=gemini`, and `GEMINI_MODEL=gemini-3.5-flash` in the Git-ignored `backend/.env` file. From `backend/`, run `npm ci`, `npm run build`, and `node --env-file=.env dist/server.js`. Use `http://localhost:3000` and the same demo token in the extension settings. Check Gemini with `node --env-file=.env --import tsx scripts/verify-llm.ts gemini`; this consumes API quota. Never put provider keys into the extension. The Render blueprint enables Gemini by default; verify the deployed endpoint before use.
 
-To test the integration without provider keys, run `npm run mock:llm` in one terminal in `backend/`, then run `HOST=127.0.0.1 FEATHERLESS_BASE_URL=http://localhost:4010/v1 FEATHERLESS_API_KEY=mock DEMO_ACCESS_TOKEN=devtoken npm run dev` in a second terminal. From `extension/`, run `npm run build` followed by `LARPDIN_INTEGRATION=1 npx playwright test e2e/backend-integration.spec.ts`.
+To test the integration without provider keys, run `npm run mock:llm` in one terminal in `backend/`, then run `HOST=127.0.0.1 GEMINI_BASE_URL=http://localhost:4010/v1 GEMINI_API_KEY=mock DEMO_ACCESS_TOKEN=devtoken npm run dev` in a second terminal. From `extension/`, run `npm run build` followed by `LARPDIN_INTEGRATION=1 npx playwright test e2e/backend-integration.spec.ts`.
 
 ## Engine handoff
 
