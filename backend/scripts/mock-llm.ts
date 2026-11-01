@@ -1,20 +1,20 @@
 /**
- * Deterministic local stand-in for Featherless's OpenAI-compatible API.
- *   npm run mock:featherless            # listens on :4010
- *   FEATHERLESS_BASE_URL=http://localhost:4010/v1 FEATHERLESS_API_KEY=mock DEMO_ACCESS_TOKEN=dev npm run dev
+ * Deterministic local stand-in for an OpenAI-compatible LLM API (Gemini/Featherless).
+ *   npm run mock:llm            # listens on :4010
+ *   GEMINI_BASE_URL=http://localhost:4010/v1 GEMINI_API_KEY=mock DEMO_ACCESS_TOKEN=dev npm run dev
  * MOCK_MODE=malformed|timeout|ratelimit|error simulates failures.
  */
 import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 
-const completion = readFileSync(new URL("../examples/featherless-completion.json", import.meta.url), "utf8");
+const completion = readFileSync(new URL("../examples/llm-completion.json", import.meta.url), "utf8");
 const port = Number(process.env.MOCK_PORT ?? 4010);
 const mode = process.env.MOCK_MODE ?? "ok";
 
 createServer((req, res) => {
   if (req.method === "GET" && req.url === "/v1/models") {
     res.writeHead(200, { "Content-Type": "application/json" });
-    return res.end(JSON.stringify({ data: [{ id: "Qwen/Qwen2.5-7B-Instruct" }] }));
+    return res.end(JSON.stringify({ data: [{ id: "models/gemini-flash-latest" }] }));
   }
   if (req.method !== "POST" || req.url !== "/v1/chat/completions") {
     res.writeHead(404).end();
@@ -39,4 +39,4 @@ createServer((req, res) => {
         return res.end(completion);
     }
   });
-}).listen(port, () => console.log(`mock Featherless (${mode}) on http://localhost:${port}/v1`));
+}).listen(port, () => console.log(`mock LLM (${mode}) on http://localhost:${port}/v1`));

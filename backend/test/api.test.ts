@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
+import { loadConfig } from "../src/config.js";
 import { GenerateResponseSchema } from "../src/contract.js";
-import { createFeatherlessClient, type ChatClient } from "../src/featherless.js";
+import { createChatClient, type ChatClient } from "../src/llm.js";
 import { createPersonaGenerator } from "../src/personas.js";
 import {
   API_KEY,
@@ -9,7 +10,7 @@ import {
   auth,
   exampleRequest,
   exampleResponse,
-  featherlessCompletion,
+  llmCompletion,
   fixtureCompletionText,
   logCapture,
   makeApp,
@@ -31,8 +32,8 @@ const post = (a: FastifyInstance, body: unknown, headers: Record<string, string>
     remoteAddress,
   });
 
-/** Fetch stub that answers like Featherless with the deterministic fixture. */
-function featherlessFetch(responses: Array<() => Response | Promise<Response>>) {
+/** Fetch stub that answers like an OpenAI-compatible provider with the deterministic fixture. */
+function llmFetch(responses: Array<() => Response | Promise<Response>>) {
   const calls: Array<{ url: string; init: RequestInit }> = [];
   const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
     calls.push({ url: String(url), init: init ?? {} });
@@ -47,15 +48,10 @@ const jsonResponse = (body: unknown, status = 200, headers: Record<string, strin
 
 const completionWith = (content: string) => ({ choices: [{ message: { role: "assistant", content } }] });
 
-function featherlessApp(responses: Array<() => Response | Promise<Response>>, configOverrides = {}) {
+function llmApp(responses: Array<() => Response | Promise<Response>>, configOverrides: Parameters<typeof testConfig>[0] = {}) {
   const config = testConfig(configOverrides);
-  const { fetchImpl, calls } = featherlessFetch(responses);
-  const chat = createFeatherlessClient({
-    apiKey: config.featherlessApiKey,
-    model: config.featherlessModel,
-    baseUrl: config.featherlessBaseUrl,
-    fetchImpl,
-  });
+  const { fetchImpl, calls } = llmFetch(responses);
+  const chat = createChatClient({ ...config.llm, fetchImpl });
   app = makeApp({ config, generate: createPersonaGenerator(chat) });
   return { app, calls };
 }
@@ -68,7 +64,7 @@ describe("GET /health", () => {
     expect(res.json()).toEqual({ status: "ok" });
   });
 
-  it.each([{ featherlessApiKey: "" }, { demoAccessToken: "" }])("returns 503 when config is missing (%o)", async (o) => {
+  it.each([{ llm: { apiKey: "" } }, { demoAccessToken: "" }])("returns 503 when config is missing (%o)", async (o) => {
     app = makeApp({ config: testConfig(o) });
     const res = await app.inject({ method: "GET", url: "/health" });
     expect(res.statusCode).toBe(503);
@@ -98,8 +94,8 @@ describe("authentication", () => {
     expect(generate).not.toHaveBeenCalled();
   });
 
-  it("rejects unauthorized requests before Featherless is contacted", async () => {
-    const { app: a, calls } = featherlessApp([() => jsonResponse(featherlessCompletion())]);
+  it("rejects unauthorized requests before the LLM provider is contacted", async () => {
+    const { app: a, calls } = llmApp([() => jsonResponse(llmCompletion())]);
     const res = await post(a, exampleRequest(), { authorization: "Bearer nope" });
     expect(res.statusCode).toBe(401);
     expect(calls).toHaveLength(0);
@@ -171,9 +167,9 @@ describe("request validation", () => {
   });
 });
 
-describe("generation through the Featherless client (mocked HTTP)", () => {
+describe("generation through the LLM client (mocked HTTP)", () => {
   it("returns exactly three contract-valid personas", async () => {
-    const { app: a, calls } = featherlessApp([() => jsonResponse(featherlessCompletion())]);
+    const { app: a, calls } = llmApp([() => jsonResponse(llmCompletion())]);
     const res = await post(a, exampleRequest());
     expect(res.statusCode).toBe(200);
     const body = res.json();
@@ -182,25 +178,39 @@ describe("generation through the Featherless client (mocked HTTP)", () => {
     expect(body.personas).toHaveLength(3);
 
     expect(calls).toHaveLength(1);
-    expect(calls[0]!.url).toBe("https://api.featherless.ai/v1/chat/completions");
+    expect(calls[0]!.url).toBe("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions");
     expect((calls[0]!.init.headers as Record<string, string>).Authorization).toBe(`Bearer ${API_KEY}`);
     const sent = JSON.parse(String(calls[0]!.init.body));
-    expect(sent.model).toBe("Qwen/Qwen2.5-7B-Instruct");
+    expect(sent.model).toBe("gemini-flash-latest");
+    expect(sent.response_format).toEqual({ type: "json_object" });
+    expect(sent.reasoning_effort).toBe("low");
+    expect(sent.max_tokens).toBe(8192);
     expect(sent.messages[1].content).toContain("University of Toronto");
   });
 
-  it("uses FEATHERLESS_MODEL when configured", async () => {
-    const { app: a, calls } = featherlessApp([() => jsonResponse(featherlessCompletion())], {
-      featherlessModel: "meta-llama/Meta-Llama-3.1-8B-Instruct",
-    });
+  it("uses the configured model", async () => {
+    const { app: a, calls } = llmApp([() => jsonResponse(llmCompletion())], { llm: { model: "gemini-2.5-flash" } });
     await post(a, exampleRequest());
-    expect(JSON.parse(String(calls[0]!.init.body)).model).toBe("meta-llama/Meta-Llama-3.1-8B-Instruct");
+    expect(JSON.parse(String(calls[0]!.init.body)).model).toBe("gemini-2.5-flash");
+  });
+
+  it("talks to Featherless without Gemini-only parameters when selected", async () => {
+    const { app: a, calls } = llmApp([() => jsonResponse(llmCompletion())], {
+      llm: loadConfig({ LLM_PROVIDER: "featherless", FEATHERLESS_API_KEY: "fl-key" }).llm,
+    });
+    const res = await post(a, exampleRequest());
+    expect(res.statusCode).toBe(200);
+    expect(calls[0]!.url).toBe("https://api.featherless.ai/v1/chat/completions");
+    const sent = JSON.parse(String(calls[0]!.init.body));
+    expect(sent.model).toBe("Qwen/Qwen2.5-7B-Instruct");
+    expect(sent).not.toHaveProperty("response_format");
+    expect(sent).not.toHaveProperty("reasoning_effort");
   });
 
   it("repairs malformed output once and succeeds", async () => {
-    const { app: a, calls } = featherlessApp([
+    const { app: a, calls } = llmApp([
       () => jsonResponse(completionWith("Sure! Here are three personas: ...")),
-      () => jsonResponse(featherlessCompletion()),
+      () => jsonResponse(llmCompletion()),
     ]);
     const res = await post(a, exampleRequest());
     expect(res.statusCode).toBe(200);
@@ -214,9 +224,9 @@ describe("generation through the Featherless client (mocked HTTP)", () => {
   it("repairs when only two distinct personas are returned", async () => {
     const two = JSON.parse(fixtureCompletionText());
     two.personas[2] = two.personas[0];
-    const { app: a, calls } = featherlessApp([
+    const { app: a, calls } = llmApp([
       () => jsonResponse(completionWith(JSON.stringify(two))),
-      () => jsonResponse(featherlessCompletion()),
+      () => jsonResponse(llmCompletion()),
     ]);
     const res = await post(a, exampleRequest());
     expect(res.statusCode).toBe(200);
@@ -225,7 +235,7 @@ describe("generation through the Featherless client (mocked HTTP)", () => {
   });
 
   it("returns 502 after exactly one failed repair", async () => {
-    const { app: a, calls } = featherlessApp([() => jsonResponse(completionWith("not json at all"))]);
+    const { app: a, calls } = llmApp([() => jsonResponse(completionWith("not json at all"))]);
     const res = await post(a, exampleRequest());
     expect(res.statusCode).toBe(502);
     expect(res.json()).toEqual({ error: { code: "GENERATION_FAILED", message: expect.any(String) } });
@@ -233,27 +243,27 @@ describe("generation through the Featherless client (mocked HTTP)", () => {
   });
 
   it("maps upstream HTTP errors to 502", async () => {
-    const { app: a } = featherlessApp([() => jsonResponse({ error: "boom" }, 500)]);
+    const { app: a } = llmApp([() => jsonResponse({ error: "boom" }, 500)]);
     const res = await post(a, exampleRequest());
     expect(res.statusCode).toBe(502);
     expect(res.json().error.code).toBe("GENERATION_FAILED");
   });
 
   it("maps upstream 429 to 429 with Retry-After", async () => {
-    const { app: a } = featherlessApp([() => jsonResponse({}, 429, { "retry-after": "17" })]);
+    const { app: a } = llmApp([() => jsonResponse({}, 429, { "retry-after": "17" })]);
     const res = await post(a, exampleRequest());
     expect(res.statusCode).toBe(429);
     expect(res.json().error.code).toBe("RATE_LIMITED");
     expect(res.headers["retry-after"]).toBe("17");
   });
 
-  it("returns 504 when Featherless does not answer before the deadline", async () => {
+  it("returns 504 when the provider does not answer before the deadline", async () => {
     const config = testConfig({ generationDeadlineMs: 50 });
     const hang: typeof fetch = (_url, init) =>
       new Promise((_resolve, reject) => {
         init?.signal?.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })));
       });
-    const chat = createFeatherlessClient({ apiKey: API_KEY, model: "m", baseUrl: "http://x/v1", fetchImpl: hang });
+    const chat = createChatClient({ apiKey: API_KEY, model: "m", baseUrl: "http://x/v1", fetchImpl: hang });
     app = makeApp({ config, generate: createPersonaGenerator(chat) });
     const res = await post(app, exampleRequest());
     expect(res.statusCode).toBe(504);
@@ -396,7 +406,7 @@ describe("CORS for the extension", () => {
 describe("configuration guard", () => {
   it("returns 503 for generation when not configured", async () => {
     const generate = vi.fn();
-    app = makeApp({ config: testConfig({ featherlessApiKey: "" }), generate });
+    app = makeApp({ config: testConfig({ llm: { apiKey: "" } }), generate });
     const res = await post(app, exampleRequest());
     expect(res.statusCode).toBe(503);
     expect(res.json().error.code).toBe("SERVICE_UNAVAILABLE");
@@ -409,14 +419,14 @@ describe("log redaction", () => {
     const logs = logCapture();
     const config = testConfig();
     const responses = [
-      () => jsonResponse(featherlessCompletion()),
+      () => jsonResponse(llmCompletion()),
       () => jsonResponse(completionWith("garbage")),
       () => jsonResponse(completionWith("garbage")),
       () => jsonResponse({}, 500),
     ];
     let i = 0;
-    const { fetchImpl } = featherlessFetch([() => responses[Math.min(i++, responses.length - 1)]!()]);
-    const chat = createFeatherlessClient({ apiKey: API_KEY, model: "m", baseUrl: config.featherlessBaseUrl, fetchImpl });
+    const { fetchImpl } = llmFetch([() => responses[Math.min(i++, responses.length - 1)]!()]);
+    const chat = createChatClient({ ...config.llm, fetchImpl });
     app = makeApp({ config, generate: createPersonaGenerator(chat), logger: { level: "trace", stream: logs.stream } });
 
     const req = exampleRequest();

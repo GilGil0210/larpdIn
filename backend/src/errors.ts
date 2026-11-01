@@ -32,7 +32,7 @@ export class UpstreamTimeoutError extends Error {
   }
 }
 
-/** Featherless itself rate limited us. */
+/** The LLM provider itself rate limited us. */
 export class UpstreamRateLimitError extends Error {
   constructor(readonly retryAfterSeconds: number | null) {
     super("Generation provider is rate limited");

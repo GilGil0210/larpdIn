@@ -1,3 +1,4 @@
+import type { LlmConfig } from "./config.js";
 import { GenerationError, UpstreamRateLimitError, UpstreamTimeoutError } from "./errors.js";
 
 export type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
@@ -5,27 +6,34 @@ export type ChatMessage = { role: "system" | "user" | "assistant"; content: stri
 export type ChatCompletionOptions = {
   messages: ChatMessage[];
   temperature?: number;
-  maxTokens?: number;
   signal: AbortSignal;
 };
 
 /** Anything that can turn chat messages into assistant text. Swappable in tests. */
 export type ChatClient = (options: ChatCompletionOptions) => Promise<string>;
 
-export type FeatherlessClientOptions = {
-  apiKey: string;
-  model: string;
-  baseUrl: string;
-  fetchImpl?: typeof fetch;
-};
+export type ChatClientOptions = Pick<LlmConfig, "apiKey" | "model" | "baseUrl"> &
+  Partial<Pick<LlmConfig, "maxTokens" | "reasoningEffort" | "jsonMode">> & {
+    fetchImpl?: typeof fetch;
+  };
 
 /**
- * Minimal client for Featherless's OpenAI-compatible chat completions endpoint.
- * Error messages never include the API key, prompts, or completions.
+ * Minimal client for an OpenAI-compatible chat completions endpoint
+ * (Gemini's OpenAI compatibility layer or Featherless). Error messages never
+ * include the API key, prompts, or completions.
  */
-export function createFeatherlessClient(opts: FeatherlessClientOptions): ChatClient {
+export function createChatClient(opts: ChatClientOptions): ChatClient {
   const fetchImpl = opts.fetchImpl ?? fetch;
-  return async ({ messages, temperature = 0.8, maxTokens = 4096, signal }) => {
+  return async ({ messages, temperature = 0.8, signal }) => {
+    const body: Record<string, unknown> = {
+      model: opts.model,
+      messages,
+      temperature,
+      max_tokens: opts.maxTokens ?? 4096,
+    };
+    if (opts.reasoningEffort) body.reasoning_effort = opts.reasoningEffort;
+    if (opts.jsonMode) body.response_format = { type: "json_object" };
+
     let res: Response;
     try {
       res = await fetchImpl(`${opts.baseUrl}/chat/completions`, {
@@ -34,12 +42,7 @@ export function createFeatherlessClient(opts: FeatherlessClientOptions): ChatCli
           "Content-Type": "application/json",
           Authorization: `Bearer ${opts.apiKey}`,
         },
-        body: JSON.stringify({
-          model: opts.model,
-          messages,
-          temperature,
-          max_tokens: maxTokens,
-        }),
+        body: JSON.stringify(body),
         signal,
       });
     } catch (err) {
@@ -56,15 +59,14 @@ export function createFeatherlessClient(opts: FeatherlessClientOptions): ChatCli
       throw new GenerationError(`Generation provider returned HTTP ${res.status}`);
     }
 
-    let body: unknown;
+    let json: unknown;
     try {
-      body = await res.json();
+      json = await res.json();
     } catch (err) {
       if (signal.aborted || isAbortError(err)) throw new UpstreamTimeoutError();
       throw new GenerationError("Generation provider returned a non-JSON response");
     }
-    const content = (body as { choices?: Array<{ message?: { content?: unknown } }> })?.choices?.[0]?.message
-      ?.content;
+    const content = (json as { choices?: Array<{ message?: { content?: unknown } }> })?.choices?.[0]?.message?.content;
     if (typeof content !== "string" || content.trim() === "") {
       throw new GenerationError("Generation provider returned an empty completion");
     }

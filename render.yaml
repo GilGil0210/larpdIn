@@ -19,9 +19,11 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
-      - key: FEATHERLESS_MODEL
-        value: Qwen/Qwen2.5-7B-Instruct
-      - key: FEATHERLESS_API_KEY
+      - key: LLM_PROVIDER
+        value: gemini
+      - key: GEMINI_MODEL
+        value: gemini-flash-latest
+      - key: GEMINI_API_KEY
         sync: false # entered in the Render dashboard on first deploy; never committed
       - key: DEMO_ACCESS_TOKEN
         generateValue: true # Render generates a random token; copy it from the dashboard

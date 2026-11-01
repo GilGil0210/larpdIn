@@ -8,7 +8,7 @@ import {
   type ProfileContent,
 } from "./contract.js";
 import { GenerationError, UpstreamTimeoutError } from "./errors.js";
-import type { ChatClient, ChatMessage } from "./featherless.js";
+import type { ChatClient, ChatMessage } from "./llm.js";
 
 const SYSTEM_PROMPT = `You generate alternative LinkedIn profile personas for a user.
 

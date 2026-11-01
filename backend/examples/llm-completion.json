@@ -2,7 +2,7 @@
   "id": "chatcmpl-fixture",
   "object": "chat.completion",
   "created": 1767225600,
-  "model": "Qwen/Qwen2.5-7B-Instruct",
+  "model": "gemini-flash-latest",
   "choices": [
     {
       "index": 0,

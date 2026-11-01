@@ -4,13 +4,13 @@ import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
 import { isConfigured, type Config } from "./config.js";
 import { GenerateRequestSchema } from "./contract.js";
 import { ApiError, GenerationError, UpstreamRateLimitError, UpstreamTimeoutError } from "./errors.js";
-import { createFeatherlessClient } from "./featherless.js";
+import { createChatClient } from "./llm.js";
 import { createPersonaGenerator, type GeneratePersonas } from "./personas.js";
 import { SlidingWindowLimiter } from "./rateLimit.js";
 
 export type AppOptions = {
   config: Config;
-  /** Override persona generation (tests). Defaults to the Featherless-backed generator. */
+  /** Override persona generation (tests). Defaults to the configured LLM provider. */
   generate?: GeneratePersonas;
   /** Clock override for rate-limit tests. */
   now?: () => number;
@@ -60,11 +60,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
   const generate =
     options.generate ??
     createPersonaGenerator(
-      createFeatherlessClient({
-        apiKey: config.featherlessApiKey,
-        model: config.featherlessModel,
-        baseUrl: config.featherlessBaseUrl,
-      }),
+      createChatClient(config.llm),
     );
 
   const perIp = new SlidingWindowLimiter(config.rateLimitPerIpPerMinute, MINUTE, now);
@@ -138,7 +134,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
   });
 
   // Runs before the body is parsed, so unauthorized or throttled callers get
-  // 401/429 without touching validation or Featherless.
+  // 401/429 without touching validation or the LLM provider.
   const guard = async (request: FastifyRequest) => {
     if (!isConfigured(config)) {
       throw new ApiError(503, "SERVICE_UNAVAILABLE", "Service is not configured");

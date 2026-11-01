@@ -1,7 +1,7 @@
 {
   "name": "larpdin-backend",
   "version": "0.1.0",
-  "description": "Larpdin persona generation API (Featherless + Fastify)",
+  "description": "Larpdin persona generation API (Fastify + Gemini/Featherless)",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
@@ -9,8 +9,8 @@
     "start": "node dist/server.js",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.check.json",
-    "verify:featherless": "tsx scripts/verify-featherless.ts",
-    "mock:featherless": "tsx scripts/mock-featherless.ts"
+    "verify:llm": "tsx scripts/verify-llm.ts",
+    "mock:llm": "tsx scripts/mock-llm.ts"
   },
   "license": "UNLICENSED",
   "type": "module",
