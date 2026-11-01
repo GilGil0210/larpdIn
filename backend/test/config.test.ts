@@ -62,7 +62,8 @@ describe("provider configuration", () => {
 
   it("is configured with the Gemini key plus the demo token", () => {
     expect(isConfigured(loadConfig({ DEMO_ACCESS_TOKEN: "t" }))).toBe(false);
-    expect(isConfigured(loadConfig({ GEMINI_API_KEY: "g" }))).toBe(false);
+    expect(isConfigured(loadConfig({ GEMINI_API_KEY: "g" }))).toBe(true);
+    expect(isConfigured(loadConfig({ GEMINI_API_KEY: "g", REQUIRE_DEMO_TOKEN: "true" }))).toBe(false);
     expect(isConfigured(loadConfig({ FEATHERLESS_API_KEY: "f", DEMO_ACCESS_TOKEN: "t" }))).toBe(false);
     expect(isConfigured(loadConfig({ GEMINI_API_KEY: "g", DEMO_ACCESS_TOKEN: "t" }))).toBe(true);
   });

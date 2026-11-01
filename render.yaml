@@ -24,7 +24,7 @@ services:
         value: gemini
       - key: GEMINI_MODEL
         value: gemini-3.5-flash
+      - key: REQUIRE_DEMO_TOKEN
+        value: "false"
       - key: GEMINI_API_KEY
         sync: false # set in the Render dashboard; never committed
-      - key: DEMO_ACCESS_TOKEN
-        generateValue: true # Render generates a random token; copy it from the dashboard

@@ -8,12 +8,12 @@ Deployed at **https://larpdin-backend.onrender.com**. The extension uses this UR
 
 ### `GET /health` (no auth)
 
-- `200 {"status":"ok"}`: `GEMINI_API_KEY` and `DEMO_ACCESS_TOKEN` are both set.
+- `200 {"status":"ok"}`: `GEMINI_API_KEY` is set.
 - `503 {"status":"unavailable"}`: otherwise.
 
 ### `POST /api/personas/generate`
 
-Requires `Authorization: Bearer <DEMO_ACCESS_TOKEN>` and `Content-Type: application/json`.
+Requires `Content-Type: application/json`. The prototype accepts requests without a demo token; rate limits still apply.
 
 - Request body: `{ profile: ProfileContent, brief: string }`. See `src/contract.ts`.
 - Response: `{ personas: [PersonaCandidate, PersonaCandidate, PersonaCandidate] }`.
@@ -47,7 +47,8 @@ Validation input limits: headline 220 characters, about 2600, brief 2000, educat
 
 | Variable | Required | Default |
 | --- | --- | --- |
-| `DEMO_ACCESS_TOKEN` | yes | |
+| `REQUIRE_DEMO_TOKEN` | no | `true` enables bearer authentication; default is `false` |
+| `DEMO_ACCESS_TOKEN` | conditional | Required only when `REQUIRE_DEMO_TOKEN=true` |
 | `GEMINI_API_KEY` | yes | Create a key at https://aistudio.google.com/apikey |
 | `GEMINI_MODEL` | no | `gemini-3.5-flash` |
 | `GEMINI_REASONING_EFFORT` | no | `low`. Set it empty to leave the parameter out |
@@ -74,11 +75,11 @@ npm run typecheck
 # Run against the deterministic mock LLM (no key needed)
 npm run mock:llm                               # terminal 1, :4010
 GEMINI_BASE_URL=http://localhost:4010/v1 GEMINI_API_KEY=mock \
-  DEMO_ACCESS_TOKEN=devtoken npm run dev        # terminal 2, :3000
+  npm run dev        # terminal 2, :3000
 
 curl -s localhost:3000/health
 curl -s -X POST localhost:3000/api/personas/generate \
-  -H 'Authorization: Bearer devtoken' -H 'Content-Type: application/json' \
+  -H 'Content-Type: application/json' \
   -d @examples/generate-request.json
 ```
 
@@ -104,7 +105,7 @@ The script checks that the model appears in Gemini's `/models` list, and lists s
 The repo-root `render.yaml` defines one web service with `rootDir: backend`, `numInstances: 1` and a `/health` check. It enables only Gemini (`LLM_PROVIDERS=gemini`, `GEMINI_MODEL=gemini-3.5-flash`) and doesn't need any extension code.
 
 1. In Render, choose **New → Blueprint** and select this repository. An existing service syncs `render.yaml` on its next deploy.
-2. Set `GEMINI_API_KEY` in the dashboard if it isn't set already. Render generates `DEMO_ACCESS_TOKEN` for you. Any old `FEATHERLESS_*` variables can be deleted; with `LLM_PROVIDERS=gemini` they're ignored.
+2. Set `GEMINI_API_KEY` in the dashboard if it isn't set already. The endpoint accepts unauthenticated requests in prototype mode. Any old `FEATHERLESS_*` variables can be deleted; with `LLM_PROVIDERS=gemini` they're ignored.
 3. Wait for the deploy to finish, then check: `curl https://larpdin-backend.onrender.com/health` → `{"status":"ok"}`.
 4. Run `npm run verify:llm` locally with the same key, or run a real generation with `curl` against the deployed URL.
 5. Keep the service at one instance. The in-memory limits are only correct with a single instance.
@@ -116,5 +117,4 @@ Gemini's free-tier limits apply per Google Cloud project; check AI Studio for th
 ### Tester access
 
 - **Base URL:** `https://larpdin-backend.onrender.com`, with no path. This is the extension's default.
-- **Demo token:** copy `DEMO_ACCESS_TOKEN` from Render → service → Environment, and send it to invited testers through a private channel such as a DM or password manager share. Never put it in Git, issues or the extension build. Testers paste it into the extension's first-run setup.
-- **Rotating the token:** edit `DEMO_ACCESS_TOKEN` in Render and save. The service redeploys, the old token stops working, and you send the new one to testers.
+- **Prototype access:** anyone who can reach the endpoint can submit generation requests, subject to rate limits. The Gemini key stays on the server.
