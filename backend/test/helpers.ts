@@ -20,7 +20,7 @@ export const fixtureCompletionText = (): string =>
 
 /** Config from env-style variables. Defaults to the Gemini-only setup used in production. */
 export function testConfig(env: Record<string, string> = {}, overrides: Partial<Config> = {}): Config {
-  return { ...loadConfig({ GEMINI_API_KEY: API_KEY, DEMO_ACCESS_TOKEN: TOKEN, ...env }), ...overrides };
+  return { ...loadConfig({ GEMINI_API_KEY: API_KEY, DEMO_ACCESS_TOKEN: TOKEN, REQUIRE_DEMO_TOKEN: "true", ...env }), ...overrides };
 }
 
 /** Retries still happen, but backoff waits are skipped. */

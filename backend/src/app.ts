@@ -159,7 +159,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
       });
     }
     const token = bearerToken(request);
-    if (!token || !tokenMatches(token, config.demoAccessToken)) {
+    if (config.requireDemoToken && (!token || !tokenMatches(token, config.demoAccessToken))) {
       throw new ApiError(401, "UNAUTHORIZED", "Missing or invalid access token", { "WWW-Authenticate": "Bearer" });
     }
   };

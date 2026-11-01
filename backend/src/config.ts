@@ -52,6 +52,7 @@ export type Config = {
   /** With several providers, skip one for this long after it fails (error, timeout, rate limit). */
   providerCooldownMs: number;
   demoAccessToken: string;
+  requireDemoToken: boolean;
   /** Extra exact origins allowed for CORS, in addition to chrome-extension://*. */
   corsOrigins: string[];
   /** Total budget for a generate request, including retries, repair and any fallback. */
@@ -109,6 +110,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       .filter((p) => p.apiKey.length > 0 && p.model.length > 0),
     providerCooldownMs: int(env.PROVIDER_COOLDOWN_MS, 120_000),
     demoAccessToken: str(env.DEMO_ACCESS_TOKEN),
+    requireDemoToken: env.REQUIRE_DEMO_TOKEN === "true",
     corsOrigins: (env.CORS_ORIGINS ?? "")
       .split(",")
       .map((s) => s.trim())
@@ -122,7 +124,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   };
 }
 
-/** Required configuration: at least one enabled provider with an API key, plus the demo token. */
+/** Required configuration: at least one enabled provider with an API key, and a demo token only if authentication is enabled. */
 export function isConfigured(config: Config): boolean {
-  return config.providers.length > 0 && config.demoAccessToken.length > 0;
+  return config.providers.length > 0 && (!config.requireDemoToken || config.demoAccessToken.length > 0);
 }

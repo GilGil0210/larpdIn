@@ -6,7 +6,7 @@ const app = buildApp({ config });
 
 if (!isConfigured(config)) {
   app.log.warn(
-    "No provider key (FEATHERLESS_API_KEY / GEMINI_API_KEY) and/or DEMO_ACCESS_TOKEN set; /health will report unavailable and generation is disabled",
+    "No provider key or required authentication token set; /health will report unavailable and generation is disabled",
   );
 }
 

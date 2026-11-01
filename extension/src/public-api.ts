@@ -6,7 +6,7 @@ export type Candidate=z.infer<typeof candidate>;
 export type Blocker={code:string;message:string;section:'profile'|'intro'|'about'|'education'|'storage'|'operation';action:'connect'|'scan'|'retry'|'recover'|'review'|'none'};
 export type SectionProgress='pending'|'saving'|'verified'|'failed'|'uncertain';
 export type AppState={
- settings:{backendUrl:string;hasToken:boolean};
+ settings:{backendUrl:string};
  connectedProfile:string|null;
  scan:{content:Profile;capturedAt:string;freshness:'fresh'|'stale'}|null;
  snapshotReadiness:'unchecked'|'ready'|'blocked';
@@ -20,7 +20,7 @@ export type AppState={
 export interface LarpdinClient {
  getState():Promise<AppState>;
  subscribe(listener:(state:AppState)=>void):()=>void;
- saveSettings(settings:{backendUrl:string;token?:string}):Promise<void>;
+ saveSettings(settings:{backendUrl:string}):Promise<void>;
  checkConnection():Promise<void>;
  connectProfile():Promise<void>;
  scanProfile():Promise<void>;

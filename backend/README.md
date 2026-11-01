@@ -8,12 +8,12 @@ Deployed at **https://larpdin-backend.onrender.com**. The extension uses this UR
 
 ### `GET /health` (no auth)
 
-- `200 {"status":"ok"}`: `GEMINI_API_KEY` and `DEMO_ACCESS_TOKEN` are both set.
+- `200 {"status":"ok"}`: `GEMINI_API_KEY` is set.
 - `503 {"status":"unavailable"}`: otherwise.
 
 ### `POST /api/personas/generate`
 
-Requires `Authorization: Bearer <DEMO_ACCESS_TOKEN>` and `Content-Type: application/json`.
+Requires `Content-Type: application/json`. The prototype accepts requests without a demo token; rate limits still apply.
 
 - Request body: `{ profile: ProfileContent, brief: string }`. See `src/contract.ts`.
 - Response: `{ personas: [PersonaCandidate, PersonaCandidate, PersonaCandidate] }`.
@@ -23,7 +23,7 @@ Errors have the shape `{ "error": { "code": "...", "message": "..." } }`:
 | Status | Code | When | Suggested UI message |
 | --- | --- | --- | --- |
 | 400 | `INVALID_INPUT` | Bad JSON, a missing or extra field, wrong types, an empty brief, a field over its limit, or a body over 32 KB | Show `message`; the user can fix the brief or draft |
-| 401 | `UNAUTHORIZED` | Missing or wrong bearer token (checked before the body is read or Gemini is called) | "Your access token isn't valid. Check it in Settings." |
+| 401 | `UNAUTHORIZED` | Bearer token missing or wrong when optional authentication is enabled | "Your access token isn't valid. Check it in Settings." |
 | 429 | `RATE_LIMITED` | Over 10 requests/min from one IP, over 60 generations/hour in total, or Gemini still rate-limited after retries. Includes a `Retry-After` header in seconds | "Too many requests. Try again in N seconds." |
 | 502 | `GENERATION_FAILED` | Gemini returned an error after retries, or the output was still invalid after one repair attempt | "Generation is unavailable right now. Your brief is saved; try again." |
 | 503 | `SERVICE_UNAVAILABLE` | The server is missing required configuration | "The service isn't set up yet." |
@@ -39,7 +39,7 @@ Validation input limits: headline 220 characters, about 2600, brief 2000, educat
 - **Brief requirements:** the model first lists the brief's concrete requirements, as a profile field plus the text it must contain (for example location → "Toronto", school → "University of Toronto"). The server checks every persona against that list, ignoring case, accents and spacing. As a backstop, a single school named in the brief must appear in every persona's education, even if the model forgot to list it. The requirements list is internal and never returned.
 - **Repair:** any problem above triggers one repair request that lists the problems. If the repaired output still fails, the API returns 502.
 - **Retries:** network errors and Gemini HTTP 408/429/5xx are retried up to twice per call. A `Retry-After` header is honoured; otherwise the wait is exponential backoff with jitter (about 0.5–1 s, then 1–2 s). A retry only starts if at least 5 seconds will remain before the 90-second deadline; otherwise the error is returned immediately. Auth and input errors (400/401/403/404) are never retried. Retries and the single repair all share the 90-second deadline.
-- **Rate limits:** the per-IP limit counts every generate request, including unauthorized ones, which slows down token guessing. The global hourly limit only counts authorized, valid requests, so bad requests can't use up the demo quota. Both limits are kept in memory, so the service must run as a single instance.
+- **Rate limits:** the per-IP limit counts every generate request, including invalid ones. The global hourly limit only counts valid requests, so bad requests can't use up the demo quota. Both limits are kept in memory, so the service must run as a single instance.
 - **CORS:** allowed for any `chrome-extension://<id>` origin, plus the exact origins listed in `CORS_ORIGINS`. Preflight requests for `Authorization` are answered without authentication.
 - **Privacy:** nothing is stored. Logs contain only the method, URL, status and timing, plus error types, retry counts and HTTP statuses. Request bodies, prompts, model output, tokens and keys are never logged, and JSON parse errors are never echoed back. A test checks this.
 
@@ -47,7 +47,8 @@ Validation input limits: headline 220 characters, about 2600, brief 2000, educat
 
 | Variable | Required | Default |
 | --- | --- | --- |
-| `DEMO_ACCESS_TOKEN` | yes | |
+| `REQUIRE_DEMO_TOKEN` | no | `true` enables bearer authentication; default is `false` |
+| `DEMO_ACCESS_TOKEN` | conditional | Required only when `REQUIRE_DEMO_TOKEN=true` |
 | `GEMINI_API_KEY` | yes | Create a key at https://aistudio.google.com/apikey |
 | `GEMINI_MODEL` | no | `gemini-3.5-flash` |
 | `GEMINI_REASONING_EFFORT` | no | `low`. Set it empty to leave the parameter out |
@@ -74,11 +75,11 @@ npm run typecheck
 # Run against the deterministic mock LLM (no key needed)
 npm run mock:llm                               # terminal 1, :4010
 GEMINI_BASE_URL=http://localhost:4010/v1 GEMINI_API_KEY=mock \
-  DEMO_ACCESS_TOKEN=devtoken npm run dev        # terminal 2, :3000
+  npm run dev        # terminal 2, :3000
 
 curl -s localhost:3000/health
 curl -s -X POST localhost:3000/api/personas/generate \
-  -H 'Authorization: Bearer devtoken' -H 'Content-Type: application/json' \
+  -H 'Content-Type: application/json' \
   -d @examples/generate-request.json
 ```
 
@@ -104,7 +105,7 @@ The script checks that the model appears in Gemini's `/models` list, and lists s
 The repo-root `render.yaml` defines one web service with `rootDir: backend`, `numInstances: 1` and a `/health` check. It enables only Gemini (`LLM_PROVIDERS=gemini`, `GEMINI_MODEL=gemini-3.5-flash`) and doesn't need any extension code.
 
 1. In Render, choose **New → Blueprint** and select this repository. An existing service syncs `render.yaml` on its next deploy.
-2. Set `GEMINI_API_KEY` in the dashboard if it isn't set already. Render generates `DEMO_ACCESS_TOKEN` for you. Any old `FEATHERLESS_*` variables can be deleted; with `LLM_PROVIDERS=gemini` they're ignored.
+2. Set `GEMINI_API_KEY` in the dashboard if it isn't set already. The endpoint accepts unauthenticated requests in prototype mode. Any old `FEATHERLESS_*` variables can be deleted; with `LLM_PROVIDERS=gemini` they're ignored.
 3. Wait for the deploy to finish, then check: `curl https://larpdin-backend.onrender.com/health` → `{"status":"ok"}`.
 4. Run `npm run verify:llm` locally with the same key, or run a real generation with `curl` against the deployed URL.
 5. Keep the service at one instance. The in-memory limits are only correct with a single instance.
@@ -116,5 +117,4 @@ Gemini's free-tier limits apply per Google Cloud project; check AI Studio for th
 ### Tester access
 
 - **Base URL:** `https://larpdin-backend.onrender.com`, with no path. This is the extension's default.
-- **Demo token:** copy `DEMO_ACCESS_TOKEN` from Render → service → Environment, and send it to invited testers through a private channel such as a DM or password manager share. Never put it in Git, issues or the extension build. Testers paste it into the extension's first-run setup.
-- **Rotating the token:** edit `DEMO_ACCESS_TOKEN` in Render and save. The service redeploys, the old token stops working, and you send the new one to testers.
+- **Prototype access:** anyone who can reach the endpoint can submit generation requests, subject to rate limits. The Gemini key stays on the server.

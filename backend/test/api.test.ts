@@ -535,3 +535,13 @@ describe("transient provider retries", () => {
     expect(calls).toHaveLength(3);
   });
 });
+
+describe('token-free prototype mode', () => {
+  it('accepts generation without a demo token while keeping rate limits', async () => {
+    const generate = vi.fn(async () => exampleResponse());
+    app = makeApp({ config: testConfig({ REQUIRE_DEMO_TOKEN: 'false', DEMO_ACCESS_TOKEN: '' }), generate });
+    const res = await post(app, exampleRequest(), {});
+    expect(res.statusCode).toBe(200);
+    expect(generate).toHaveBeenCalledOnce();
+  });
+});

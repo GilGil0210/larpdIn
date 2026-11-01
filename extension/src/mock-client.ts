@@ -1,6 +1,6 @@
 import type {AppState,Candidate,LarpdinClient} from './public-api';
 import {candidate} from './contract';
-const blank:AppState={settings:{backendUrl:'https://larpdin-backend.onrender.com',hasToken:false},connectedProfile:null,scan:null,snapshotReadiness:'unchecked',blockers:[{code:'profile_disconnected',message:'Connect your signed-in LinkedIn profile.',section:'profile',action:'connect'}],candidates:[],personas:[],activePersonaId:null,restoration:{original:false,undo:false},operation:null};
+const blank:AppState={settings:{backendUrl:'https://larpdin-backend.onrender.com'},connectedProfile:null,scan:null,snapshotReadiness:'unchecked',blockers:[{code:'profile_disconnected',message:'Connect your signed-in LinkedIn profile.',section:'profile',action:'connect'}],candidates:[],personas:[],activePersonaId:null,restoration:{original:false,undo:false},operation:null};
 /** Deterministic in-memory implementation for UI development; never contacts LinkedIn. */
 export function createMockClient(initial:Partial<AppState>={}):LarpdinClient {
  let state:AppState=structuredClone({...blank,...initial});const listeners=new Set<(state:AppState)=>void>();let undo:string|null=null;
@@ -9,8 +9,8 @@ export function createMockClient(initial:Partial<AppState>={}):LarpdinClient {
  const complete=(id:string|null)=>{undo=state.activePersonaId;state.activePersonaId=id;state.restoration={original:true,undo:true};state.operation={status:'complete',message:'Switch verified',sections:{intro:'verified',about:'verified',education:'verified'},recoveryAvailable:false};notify()};
  return {
   async getState(){return read()},subscribe(fn){listeners.add(fn);fn(read());return()=>listeners.delete(fn)},
-  async saveSettings(value){state.settings={backendUrl:value.backendUrl,hasToken:value.token===undefined?state.settings.hasToken:!!value.token};notify()},
-  async checkConnection(){if(!state.settings.hasToken)throw Error('Enter the demo access token')},
+  async saveSettings(value){state.settings={backendUrl:value.backendUrl};notify()},
+  async checkConnection(){},
   async connectProfile(){state.connectedProfile='https://www.linkedin.com/in/example/';state.blockers=[];notify()},
   async scanProfile(){if(!state.connectedProfile)throw Error('Connect your profile first');state.scan={content:{headline:'Example headline',location:'Toronto',industry:'Technology',about:'Example About',education:[]},capturedAt:new Date().toISOString(),freshness:'fresh'};state.snapshotReadiness='ready';state.blockers=[];notify()},
   async generate(brief){if(!state.scan)throw Error('Scan your profile first');state.candidates=[1,2,3].map(i=>({name:`Example ${i}`,description:brief,content:structuredClone(state.scan!.content)}));notify()},

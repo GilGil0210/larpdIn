@@ -15,7 +15,6 @@ test('unpacked extension works with the backend contract',async()=>{
   let worker=context.serviceWorkers()[0];if(!worker)worker=await context.waitForEvent('serviceworker');
   const page=await context.newPage();await page.goto(`chrome-extension://${new URL(worker.url()).host}/index.html`);
   await page.getByLabel('Backend URL').fill('http://localhost:3000');
-  await page.getByLabel('Demo access token').fill(process.env.LARPDIN_REAL_BACKEND === '1' ? process.env.DEMO_ACCESS_TOKEN || '' : 'devtoken');
   await page.getByLabel('LinkedIn profile URL').fill('https://www.linkedin.com/in/example/');
   await page.getByLabel('Profile JSON').fill(JSON.stringify({headline:'Software Engineer',location:'Seattle',industry:'Software Development',about:'I build software.',education:[]}));
   await page.getByLabel('Brief').fill('Machine learning in Toronto, University of Toronto');
