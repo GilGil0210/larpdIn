@@ -16,9 +16,16 @@ export class ApiError extends Error {
   }
 }
 
-/** Generation could not produce valid output (contract status 502). */
+/**
+ * Generation failed (contract status 502). `source` is "provider" when the LLM
+ * service itself failed (HTTP error, unreachable) and "output" when it answered
+ * but the content was unusable.
+ */
 export class GenerationError extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    readonly source: "provider" | "output" = "output",
+  ) {
     super(message);
     this.name = "GenerationError";
   }

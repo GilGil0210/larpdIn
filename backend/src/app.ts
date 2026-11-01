@@ -4,16 +4,20 @@ import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
 import { isConfigured, type Config } from "./config.js";
 import { GenerateRequestSchema } from "./contract.js";
 import { ApiError, GenerationError, UpstreamRateLimitError, UpstreamTimeoutError } from "./errors.js";
+import { createFallbackGenerator } from "./fallback.js";
 import { createChatClient } from "./llm.js";
 import { createPersonaGenerator, type GeneratePersonas } from "./personas.js";
 import { SlidingWindowLimiter } from "./rateLimit.js";
+import { withSignal } from "./signal.js";
 
 export type AppOptions = {
   config: Config;
-  /** Override persona generation (tests). Defaults to the configured LLM provider. */
+  /** Override persona generation (tests). Defaults to the configured providers with fallback. */
   generate?: GeneratePersonas;
-  /** Clock override for rate-limit tests. */
+  /** Clock override for rate-limit and cooldown tests. */
   now?: () => number;
+  /** fetch override for provider HTTP calls (tests). */
+  fetchImpl?: typeof fetch;
   /** false disables logging; a stream captures it (tests). Defaults to stdout. */
   logger?: false | { level?: string; stream?: NodeJS.WritableStream };
 };
@@ -59,8 +63,13 @@ export function buildApp(options: AppOptions): FastifyInstance {
 
   const generate =
     options.generate ??
-    createPersonaGenerator(
-      createChatClient(config.llm),
+    createFallbackGenerator(
+      config.providers.map((provider) => ({
+        name: provider.provider,
+        timeoutMs: provider.timeoutMs,
+        generate: createPersonaGenerator(createChatClient({ ...provider, fetchImpl: options.fetchImpl })),
+      })),
+      { cooldownMs: config.providerCooldownMs, now },
     );
 
   const perIp = new SlidingWindowLimiter(config.rateLimitPerIpPerMinute, MINUTE, now);
@@ -173,7 +182,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
     };
     reply.raw.on("close", onClose);
     try {
-      const result = await raceDeadline(generate(parsed.data, controller.signal), controller.signal);
+      const result = await withSignal(generate(parsed.data, controller.signal, request.log), controller.signal);
       return reply.code(200).send(result);
     } finally {
       clearTimeout(timer);
@@ -182,23 +191,4 @@ export function buildApp(options: AppOptions): FastifyInstance {
   });
 
   return app;
-}
-
-/** Ensures the deadline wins even if a generator ignores its AbortSignal. */
-function raceDeadline<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const onAbort = () => reject(new UpstreamTimeoutError());
-    if (signal.aborted) return onAbort();
-    signal.addEventListener("abort", onAbort, { once: true });
-    work.then(
-      (v) => {
-        signal.removeEventListener("abort", onAbort);
-        resolve(v);
-      },
-      (e) => {
-        signal.removeEventListener("abort", onAbort);
-        reject(signal.aborted ? new UpstreamTimeoutError() : e);
-      },
-    );
-  });
 }

@@ -1,7 +1,7 @@
 /**
  * Deterministic local stand-in for an OpenAI-compatible LLM API (Gemini/Featherless).
  *   npm run mock:llm            # listens on :4010
- *   GEMINI_BASE_URL=http://localhost:4010/v1 GEMINI_API_KEY=mock DEMO_ACCESS_TOKEN=dev npm run dev
+ *   FEATHERLESS_BASE_URL=http://localhost:4010/v1 FEATHERLESS_API_KEY=mock DEMO_ACCESS_TOKEN=dev npm run dev
  * MOCK_MODE=malformed|timeout|ratelimit|error simulates failures.
  */
 import { readFileSync } from "node:fs";

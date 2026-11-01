@@ -47,7 +47,7 @@ export function createChatClient(opts: ChatClientOptions): ChatClient {
       });
     } catch (err) {
       if (signal.aborted || isAbortError(err)) throw new UpstreamTimeoutError();
-      throw new GenerationError("Could not reach the generation provider");
+      throw new GenerationError("Could not reach the generation provider", "provider");
     }
 
     if (res.status === 429) {
@@ -56,7 +56,7 @@ export function createChatClient(opts: ChatClientOptions): ChatClient {
     }
     if (res.status === 408 || res.status === 504) throw new UpstreamTimeoutError();
     if (!res.ok) {
-      throw new GenerationError(`Generation provider returned HTTP ${res.status}`);
+      throw new GenerationError(`Generation provider returned HTTP ${res.status}`, "provider");
     }
 
     let json: unknown;
@@ -64,7 +64,7 @@ export function createChatClient(opts: ChatClientOptions): ChatClient {
       json = await res.json();
     } catch (err) {
       if (signal.aborted || isAbortError(err)) throw new UpstreamTimeoutError();
-      throw new GenerationError("Generation provider returned a non-JSON response");
+      throw new GenerationError("Generation provider returned a non-JSON response", "provider");
     }
     const content = (json as { choices?: Array<{ message?: { content?: unknown } }> })?.choices?.[0]?.message?.content;
     if (typeof content !== "string" || content.trim() === "") {

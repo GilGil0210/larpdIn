@@ -1,11 +1,12 @@
 import { readFileSync } from "node:fs";
 import { Writable } from "node:stream";
 import { buildApp, type AppOptions } from "../src/app.js";
-import { loadConfig, type Config, type LlmConfig } from "../src/config.js";
+import { loadConfig, type Config } from "../src/config.js";
 import type { GenerateRequest, GenerateResponse } from "../src/contract.js";
 
 export const TOKEN = "test-demo-token-0123456789";
-export const API_KEY = "AIza-secret-api-key-abcdef";
+export const API_KEY = "fl-secret-api-key-abcdef";
+export const GEMINI_KEY = "AIza-gemini-secret-key-123456";
 
 const read = (name: string) => readFileSync(new URL(`../examples/${name}`, import.meta.url), "utf8");
 
@@ -17,10 +18,12 @@ export const llmCompletion = (): unknown => JSON.parse(read("llm-completion.json
 export const fixtureCompletionText = (): string =>
   (llmCompletion() as { choices: Array<{ message: { content: string } }> }).choices[0]!.message.content;
 
-export function testConfig(overrides: Partial<Omit<Config, "llm">> & { llm?: Partial<LlmConfig> } = {}): Config {
-  const base = loadConfig({ GEMINI_API_KEY: API_KEY, DEMO_ACCESS_TOKEN: TOKEN });
-  const { llm, ...rest } = overrides;
-  return { ...base, ...rest, llm: { ...base.llm, ...llm } };
+/**
+ * Config from env-style variables. Defaults to Featherless only, so tests see a
+ * single provider unless they opt into the Gemini fallback with GEMINI_API_KEY.
+ */
+export function testConfig(env: Record<string, string> = {}, overrides: Partial<Config> = {}): Config {
+  return { ...loadConfig({ FEATHERLESS_API_KEY: API_KEY, DEMO_ACCESS_TOKEN: TOKEN, ...env }), ...overrides };
 }
 
 export function makeApp(options: Partial<AppOptions> & { config?: Config } = {}) {

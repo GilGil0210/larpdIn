@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
-import { loadConfig } from "../src/config.js";
 import { GenerateResponseSchema } from "../src/contract.js";
 import { createChatClient, type ChatClient } from "../src/llm.js";
 import { createPersonaGenerator } from "../src/personas.js";
 import {
   API_KEY,
+  GEMINI_KEY,
   TOKEN,
   auth,
   exampleRequest,
@@ -48,11 +48,11 @@ const jsonResponse = (body: unknown, status = 200, headers: Record<string, strin
 
 const completionWith = (content: string) => ({ choices: [{ message: { role: "assistant", content } }] });
 
-function llmApp(responses: Array<() => Response | Promise<Response>>, configOverrides: Parameters<typeof testConfig>[0] = {}) {
-  const config = testConfig(configOverrides);
+/** App using the real provider/fallback wiring, with provider HTTP stubbed. */
+function llmApp(responses: Array<() => Response | Promise<Response>>, env: Record<string, string> = {}) {
+  const config = testConfig(env);
   const { fetchImpl, calls } = llmFetch(responses);
-  const chat = createChatClient({ ...config.llm, fetchImpl });
-  app = makeApp({ config, generate: createPersonaGenerator(chat) });
+  app = makeApp({ config, fetchImpl });
   return { app, calls };
 }
 
@@ -64,8 +64,8 @@ describe("GET /health", () => {
     expect(res.json()).toEqual({ status: "ok" });
   });
 
-  it.each([{ llm: { apiKey: "" } }, { demoAccessToken: "" }])("returns 503 when config is missing (%o)", async (o) => {
-    app = makeApp({ config: testConfig(o) });
+  it.each<Record<string, string>>([{ FEATHERLESS_API_KEY: "" }, { DEMO_ACCESS_TOKEN: "" }])("returns 503 when config is missing (%o)", async (env) => {
+    app = makeApp({ config: testConfig(env) });
     const res = await app.inject({ method: "GET", url: "/health" });
     expect(res.statusCode).toBe(503);
     expect(res.json()).toEqual({ status: "unavailable" });
@@ -178,33 +178,37 @@ describe("generation through the LLM client (mocked HTTP)", () => {
     expect(body.personas).toHaveLength(3);
 
     expect(calls).toHaveLength(1);
-    expect(calls[0]!.url).toBe("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions");
+    expect(calls[0]!.url).toBe("https://api.featherless.ai/v1/chat/completions");
     expect((calls[0]!.init.headers as Record<string, string>).Authorization).toBe(`Bearer ${API_KEY}`);
+    const sent = JSON.parse(String(calls[0]!.init.body));
+    expect(sent.model).toBe("Qwen/Qwen2.5-7B-Instruct");
+    expect(sent).not.toHaveProperty("response_format");
+    expect(sent).not.toHaveProperty("reasoning_effort");
+    expect(sent.messages[1].content).toContain("University of Toronto");
+  });
+
+  it("uses the configured model", async () => {
+    const { app: a, calls } = llmApp([() => jsonResponse(llmCompletion())], {
+      FEATHERLESS_MODEL: "meta-llama/Meta-Llama-3.1-8B-Instruct",
+    });
+    await post(a, exampleRequest());
+    expect(JSON.parse(String(calls[0]!.init.body)).model).toBe("meta-llama/Meta-Llama-3.1-8B-Instruct");
+  });
+
+  it("works with only Gemini configured, sending Gemini parameters", async () => {
+    const { app: a, calls } = llmApp([() => jsonResponse(llmCompletion())], {
+      FEATHERLESS_API_KEY: "",
+      GEMINI_API_KEY: GEMINI_KEY,
+    });
+    const res = await post(a, exampleRequest());
+    expect(res.statusCode).toBe(200);
+    expect(calls[0]!.url).toBe("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions");
+    expect((calls[0]!.init.headers as Record<string, string>).Authorization).toBe(`Bearer ${GEMINI_KEY}`);
     const sent = JSON.parse(String(calls[0]!.init.body));
     expect(sent.model).toBe("gemini-flash-latest");
     expect(sent.response_format).toEqual({ type: "json_object" });
     expect(sent.reasoning_effort).toBe("low");
     expect(sent.max_tokens).toBe(8192);
-    expect(sent.messages[1].content).toContain("University of Toronto");
-  });
-
-  it("uses the configured model", async () => {
-    const { app: a, calls } = llmApp([() => jsonResponse(llmCompletion())], { llm: { model: "gemini-2.5-flash" } });
-    await post(a, exampleRequest());
-    expect(JSON.parse(String(calls[0]!.init.body)).model).toBe("gemini-2.5-flash");
-  });
-
-  it("talks to Featherless without Gemini-only parameters when selected", async () => {
-    const { app: a, calls } = llmApp([() => jsonResponse(llmCompletion())], {
-      llm: loadConfig({ LLM_PROVIDER: "featherless", FEATHERLESS_API_KEY: "fl-key" }).llm,
-    });
-    const res = await post(a, exampleRequest());
-    expect(res.statusCode).toBe(200);
-    expect(calls[0]!.url).toBe("https://api.featherless.ai/v1/chat/completions");
-    const sent = JSON.parse(String(calls[0]!.init.body));
-    expect(sent.model).toBe("Qwen/Qwen2.5-7B-Instruct");
-    expect(sent).not.toHaveProperty("response_format");
-    expect(sent).not.toHaveProperty("reasoning_effort");
   });
 
   it("repairs malformed output once and succeeds", async () => {
@@ -258,7 +262,7 @@ describe("generation through the LLM client (mocked HTTP)", () => {
   });
 
   it("returns 504 when the provider does not answer before the deadline", async () => {
-    const config = testConfig({ generationDeadlineMs: 50 });
+    const config = testConfig({}, { generationDeadlineMs: 50 });
     const hang: typeof fetch = (_url, init) =>
       new Promise((_resolve, reject) => {
         init?.signal?.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })));
@@ -271,7 +275,7 @@ describe("generation through the LLM client (mocked HTTP)", () => {
   });
 
   it("applies the deadline across the repair attempt too", async () => {
-    const config = testConfig({ generationDeadlineMs: 80 });
+    const config = testConfig({}, { generationDeadlineMs: 80 });
     let calls = 0;
     const chat: ChatClient = async ({ signal }) => {
       calls++;
@@ -290,7 +294,7 @@ describe("generation through the LLM client (mocked HTTP)", () => {
   });
 
   it("enforces the deadline even if the generator ignores its signal", async () => {
-    app = makeApp({ config: testConfig({ generationDeadlineMs: 30 }), generate: () => new Promise(() => {}) });
+    app = makeApp({ config: testConfig({}, { generationDeadlineMs: 30 }), generate: () => new Promise(() => {}) });
     const res = await post(app, exampleRequest());
     expect(res.statusCode).toBe(504);
   });
@@ -393,7 +397,7 @@ describe("CORS for the extension", () => {
   });
 
   it("allows origins listed in CORS_ORIGINS", async () => {
-    app = makeApp({ config: testConfig({ corsOrigins: ["http://localhost:5173"] }) });
+    app = makeApp({ config: testConfig({}, { corsOrigins: ["http://localhost:5173"] }) });
     const res = await app.inject({
       method: "OPTIONS",
       url: "/api/personas/generate",
@@ -406,7 +410,7 @@ describe("CORS for the extension", () => {
 describe("configuration guard", () => {
   it("returns 503 for generation when not configured", async () => {
     const generate = vi.fn();
-    app = makeApp({ config: testConfig({ llm: { apiKey: "" } }), generate });
+    app = makeApp({ config: testConfig({ FEATHERLESS_API_KEY: "" }), generate });
     const res = await post(app, exampleRequest());
     expect(res.statusCode).toBe(503);
     expect(res.json().error.code).toBe("SERVICE_UNAVAILABLE");
@@ -417,7 +421,8 @@ describe("configuration guard", () => {
 describe("log redaction", () => {
   it("never logs credentials, prompts, profile content, or generated content", async () => {
     const logs = logCapture();
-    const config = testConfig();
+    // Both providers configured, so fallback paths are logged too.
+    const config = testConfig({ GEMINI_API_KEY: GEMINI_KEY });
     const responses = [
       () => jsonResponse(llmCompletion()),
       () => jsonResponse(completionWith("garbage")),
@@ -426,8 +431,7 @@ describe("log redaction", () => {
     ];
     let i = 0;
     const { fetchImpl } = llmFetch([() => responses[Math.min(i++, responses.length - 1)]!()]);
-    const chat = createChatClient({ ...config.llm, fetchImpl });
-    app = makeApp({ config, generate: createPersonaGenerator(chat), logger: { level: "trace", stream: logs.stream } });
+    app = makeApp({ config, fetchImpl, logger: { level: "trace", stream: logs.stream } });
 
     const req = exampleRequest();
     await post(app, req); // success
@@ -441,6 +445,7 @@ describe("log redaction", () => {
     for (const secret of [
       TOKEN,
       API_KEY,
+      GEMINI_KEY,
       "wrong-token-value",
       "LEAKY-BRIEF-IN-BAD-JSON",
       req.brief,

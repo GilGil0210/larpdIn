@@ -1,4 +1,4 @@
-export type LlmProvider = "gemini" | "featherless";
+export type LlmProvider = "featherless" | "gemini";
 
 export type LlmConfig = {
   provider: LlmProvider;
@@ -11,9 +11,23 @@ export type LlmConfig = {
   reasoningEffort: string;
   /** Send response_format: {type: "json_object"} (supported by Gemini, not assumed for Featherless). */
   jsonMode: boolean;
+  /**
+   * Max time this provider may spend on one request (first attempt + repair)
+   * before falling back. null = whatever remains of the overall deadline.
+   */
+  timeoutMs: number | null;
 };
 
 export const PROVIDER_DEFAULTS: Record<LlmProvider, Omit<LlmConfig, "provider" | "apiKey">> = {
+  featherless: {
+    model: "Qwen/Qwen2.5-7B-Instruct",
+    baseUrl: "https://api.featherless.ai/v1",
+    maxTokens: 4096,
+    reasoningEffort: "",
+    jsonMode: false,
+    // Leaves ~30s of the 90s deadline for the Gemini fallback.
+    timeoutMs: 60_000,
+  },
   gemini: {
     // Alias that Google keeps pointed at the current Flash model.
     model: "gemini-flash-latest",
@@ -22,24 +36,24 @@ export const PROVIDER_DEFAULTS: Record<LlmProvider, Omit<LlmConfig, "provider" |
     maxTokens: 8192,
     reasoningEffort: "low",
     jsonMode: true,
-  },
-  featherless: {
-    model: "Qwen/Qwen2.5-7B-Instruct",
-    baseUrl: "https://api.featherless.ai/v1",
-    maxTokens: 4096,
-    reasoningEffort: "",
-    jsonMode: false,
+    timeoutMs: null,
   },
 };
+
+/** Featherless is primary; Gemini is the fallback. */
+export const DEFAULT_PROVIDER_ORDER: LlmProvider[] = ["featherless", "gemini"];
 
 export type Config = {
   port: number;
   host: string;
-  llm: LlmConfig;
+  /** Configured providers (API key present), in the order they are tried. */
+  providers: LlmConfig[];
+  /** After a provider fails (error, timeout, rate limit), skip it for this long. */
+  providerCooldownMs: number;
   demoAccessToken: string;
   /** Extra exact origins allowed for CORS, in addition to chrome-extension://*. */
   corsOrigins: string[];
-  /** Total budget for a generate request, including the repair attempt. */
+  /** Total budget for a generate request, including repair and fallback. */
   generationDeadlineMs: number;
   bodyLimitBytes: number;
   rateLimitPerIpPerMinute: number;
@@ -55,24 +69,13 @@ function int(value: string | undefined, fallback: number): number {
 
 const str = (value: string | undefined) => value?.trim() ?? "";
 
-/**
- * LLM_PROVIDER picks the provider explicitly. Otherwise Gemini is used when
- * GEMINI_API_KEY is set, then Featherless when FEATHERLESS_API_KEY is set,
- * else Gemini (unconfigured).
- */
-export function resolveProvider(env: NodeJS.ProcessEnv): LlmProvider {
-  const explicit = str(env.LLM_PROVIDER).toLowerCase();
-  if (explicit === "gemini" || explicit === "featherless") return explicit;
-  if (str(env.GEMINI_API_KEY)) return "gemini";
-  if (str(env.FEATHERLESS_API_KEY)) return "featherless";
-  return "gemini";
-}
+const ENV_PREFIX: Record<LlmProvider, string> = { featherless: "FEATHERLESS", gemini: "GEMINI" };
 
-function loadLlmConfig(env: NodeJS.ProcessEnv): LlmConfig {
-  const provider = resolveProvider(env);
+export function loadProviderConfig(provider: LlmProvider, env: NodeJS.ProcessEnv): LlmConfig {
   const defaults = PROVIDER_DEFAULTS[provider];
-  const prefix = provider === "gemini" ? "GEMINI" : "FEATHERLESS";
+  const prefix = ENV_PREFIX[provider];
   const reasoning = env[`${prefix}_REASONING_EFFORT`];
+  const timeout = str(env[`${prefix}_TIMEOUT_MS`]);
   return {
     provider,
     apiKey: str(env[`${prefix}_API_KEY`]),
@@ -81,14 +84,29 @@ function loadLlmConfig(env: NodeJS.ProcessEnv): LlmConfig {
     maxTokens: int(env[`${prefix}_MAX_TOKENS`], defaults.maxTokens),
     reasoningEffort: reasoning === undefined ? defaults.reasoningEffort : reasoning.trim(),
     jsonMode: defaults.jsonMode,
+    timeoutMs: timeout ? int(timeout, defaults.timeoutMs ?? 0) || null : defaults.timeoutMs,
   };
+}
+
+/** LLM_PROVIDERS (e.g. "featherless,gemini") sets the order; unknown names are ignored. */
+export function providerOrder(env: NodeJS.ProcessEnv): LlmProvider[] {
+  const raw = str(env.LLM_PROVIDERS);
+  if (!raw) return DEFAULT_PROVIDER_ORDER;
+  const names = raw
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter((s): s is LlmProvider => s === "featherless" || s === "gemini");
+  return [...new Set(names)];
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return {
     port: int(env.PORT, 3000),
     host: str(env.HOST) || "0.0.0.0",
-    llm: loadLlmConfig(env),
+    providers: providerOrder(env)
+      .map((p) => loadProviderConfig(p, env))
+      .filter((p) => p.apiKey.length > 0 && p.model.length > 0),
+    providerCooldownMs: int(env.PROVIDER_COOLDOWN_MS, 120_000),
     demoAccessToken: str(env.DEMO_ACCESS_TOKEN),
     corsOrigins: (env.CORS_ORIGINS ?? "")
       .split(",")
@@ -103,10 +121,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   };
 }
 
-/** Name of the API key variable for the active provider, for messages. */
-export const apiKeyVar = (config: Config) => (config.llm.provider === "gemini" ? "GEMINI_API_KEY" : "FEATHERLESS_API_KEY");
-
-/** Required configuration for /health and for serving generation requests. */
+/** Required configuration: at least one provider with an API key, plus the demo token. */
 export function isConfigured(config: Config): boolean {
-  return config.llm.apiKey.length > 0 && config.llm.model.length > 0 && config.demoAccessToken.length > 0;
+  return config.providers.length > 0 && config.demoAccessToken.length > 0;
 }

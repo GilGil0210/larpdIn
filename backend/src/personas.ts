@@ -213,7 +213,17 @@ export function parseCandidates(text: string): { ok: true; value: GenerateRespon
 // Orchestration: one generation + at most one repair, inside one deadline.
 // ---------------------------------------------------------------------------
 
-export type GeneratePersonas = (request: GenerateRequest, signal: AbortSignal) => Promise<GenerateResponse>;
+/** Minimal logger surface (Fastify's request.log fits). Never pass content to it. */
+export type GenerationLog = {
+  info: (obj: Record<string, unknown>, msg: string) => void;
+  warn: (obj: Record<string, unknown>, msg: string) => void;
+};
+
+export type GeneratePersonas = (
+  request: GenerateRequest,
+  signal: AbortSignal,
+  log?: GenerationLog,
+) => Promise<GenerateResponse>;
 
 export function createPersonaGenerator(chat: ChatClient): GeneratePersonas {
   return async (request, signal) => {

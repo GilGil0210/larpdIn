@@ -1,12 +1,12 @@
 import { buildApp } from "./app.js";
-import { apiKeyVar, isConfigured, loadConfig } from "./config.js";
+import { isConfigured, loadConfig } from "./config.js";
 
 const config = loadConfig();
 const app = buildApp({ config });
 
 if (!isConfigured(config)) {
   app.log.warn(
-    `${apiKeyVar(config)} and/or DEMO_ACCESS_TOKEN are not set; /health will report unavailable and generation is disabled`,
+    "No provider key (FEATHERLESS_API_KEY / GEMINI_API_KEY) and/or DEMO_ACCESS_TOKEN set; /health will report unavailable and generation is disabled",
   );
 }
 
@@ -20,7 +20,10 @@ process.on("SIGINT", () => void shutdown("SIGINT"));
 
 try {
   await app.listen({ port: config.port, host: config.host });
-  app.log.info({ provider: config.llm.provider, model: config.llm.model }, "larpdin backend ready");
+  app.log.info(
+    { providers: config.providers.map((p) => `${p.provider}:${p.model}`) },
+    "larpdin backend ready (providers in fallback order)",
+  );
 } catch (err) {
   app.log.error({ errType: (err as Error).name }, "failed to start");
   process.exit(1);
