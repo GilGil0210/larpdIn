@@ -1,0 +1,21 @@
+{
+  "profile": {
+    "headline": "Software Engineer at Acme Corp",
+    "location": "Seattle, Washington, United States",
+    "industry": "Software Development",
+    "about": "I build reliable backend systems and enjoy mentoring new engineers.",
+    "education": [
+      {
+        "school": "University of Washington",
+        "degree": "Bachelor of Science - BS",
+        "fieldOfStudy": "Computer Science",
+        "startYear": 2014,
+        "endYear": 2018,
+        "grade": "",
+        "activities": "ACM chapter",
+        "description": ""
+      }
+    ]
+  },
+  "brief": "Make me look like a machine learning person based in Toronto who studied at the University of Toronto."
+}
