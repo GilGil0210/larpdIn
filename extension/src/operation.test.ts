@@ -10,3 +10,18 @@ describe('switch recovery',()=>{
 });
 it('rejects an uninspected education attachment area',()=>{const edu={school:'School',degree:'',fieldOfStudy:'',startYear:null,endYear:null,grade:'',activities:'',description:''};expect(()=>snapshot.parse({...original,content:{...content,education:[edu]},educationRecordIds:['1'],educationRecords:[{...edu,id:'1',startMonth:null,endMonth:null,skills:[],media:[],attachmentsInspected:false}]})).toThrow()});
 it('requires intro details to match the profile before a snapshot can be used',()=>{expect(snapshot.safeParse({...original,introDetails:{...original.introDetails,city:'Different'}}).success).toBe(false);const incomplete={...original};delete (incomplete as Partial<typeof original>).introDetails;expect(snapshot.safeParse(incomplete).success).toBe(false)});
+
+it('reads a running operation without changing its checkpoint', async()=>{
+ const op=beginSection(createOperation(original.profileUrl,content,original),'intro');
+ const values:Record<string,unknown>={};
+ const set=async (items:Record<string,unknown>)=>{Object.assign(values,items)};
+ const get=async (key:string)=>({[key]:values[key]});
+ const old=globalThis.chrome;
+ Object.assign(globalThis,{chrome:{storage:{local:{get,set}}}});
+ try {
+  const {persistOperation,loadOperation}=await import('./operation');
+  await persistOperation(op);
+  expect(await loadOperation(original.profileUrl)).toEqual(op);
+  expect(Object.values(values)).toEqual([op]);
+ } finally {Object.assign(globalThis,{chrome:old})}
+});

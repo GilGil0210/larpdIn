@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import {snapshot,type Snapshot} from './snapshot';
+import {snapshot,assertRestorable,type Snapshot} from './snapshot';
 import {operation,type Operation} from './operation';
 import {profileKey} from './storage';
 const historySchema=z.object({original:snapshot,undo:snapshot.nullable(),activePersonaId:z.string().uuid().nullable(),undoPersonaId:z.string().uuid().nullable().default(null)}).strict();
@@ -14,7 +14,7 @@ export async function loadHistory(url:string):Promise<History|null> {
 }
 /** Capture the original once; never replace it with a later persona. */
 export async function saveOriginal(original:Snapshot):Promise<History> {
- const checked=snapshot.parse(original), key=keyFor(checked.profileUrl);
+ const checked=snapshot.parse(original);assertRestorable(checked);const key=keyFor(checked.profileUrl);
  const existing=await loadHistory(checked.profileUrl);
  if(existing) return existing;
  const history=historySchema.parse({original:checked,undo:null,activePersonaId:null,undoPersonaId:null});

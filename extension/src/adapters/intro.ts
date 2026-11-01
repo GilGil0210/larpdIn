@@ -1,4 +1,4 @@
-import {findField,findButton,setText} from '../form';
+import {findField,findButton,setText,fieldValue} from '../form';
 
 /** Validate all controls observed in the intro form before changing anything. */
 export function readIntro(root:ParentNode) {
@@ -8,7 +8,7 @@ export function readIntro(root:ParentNode) {
  const industry=findField(root,'Industry');
  // Ensure the identity fields and save control exist so this is the expected form.
  findField(root,'First name'); findField(root,'Last name'); findButton(root,'Save');
- return {headline:headline.value,country:country.value,city:city.value,industry:industry.value};
+ return {headline:fieldValue(headline),country:fieldValue(country),city:fieldValue(city),industry:fieldValue(industry)};
 }
 /** Changes the headline only. The caller owns submission, verification, and recovery. */
 export function prepareHeadline(root:ParentNode,value:string) {
@@ -23,7 +23,7 @@ import {selectAutocomplete} from '../form';
 export type IntroValues={firstName:string;lastName:string;additionalName:string;pronouns:string;education:string;headline:string;country:string;city:string;industry:string};
 export function readCompleteIntro(root:ParentNode):IntroValues {
  const intro=readIntro(root);
- return {...intro,firstName:findField(root,'First name').value,lastName:findField(root,'Last name').value,additionalName:findField(root,'Additional name').value,pronouns:findField(root,'Pronouns').value,education:findField(root,'Education').value};
+ return {...intro,firstName:fieldValue(findField(root,'First name')),lastName:fieldValue(findField(root,'Last name')),additionalName:fieldValue(findField(root,'Additional name')),pronouns:fieldValue(findField(root,'Pronouns')),education:fieldValue(findField(root,'Education'))};
 }
 /** Prepares, but does not save, a validated intro form. Location and industry must match exact suggestions. */
 export async function prepareIntro(root:ParentNode,before:IntroValues,target:{headline:string;location:string;industry:string}):Promise<void> {

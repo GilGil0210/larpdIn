@@ -10,10 +10,10 @@ test('education replacement verifies each simulated browser change',async({page}
   const old=make('Old school'),target=[{...make('New school'),startMonth:null,endMonth:null}],url='https://www.linkedin.com/in/example/';
   const original={profileUrl:url,capturedAt:'2026-01-01T00:00:00.000Z',content:{headline:'',location:'',industry:'',about:'',education:[old]},introDetails:{firstName:'',lastName:'',additionalName:'',pronouns:'',education:'',headline:'',country:'',city:'',industry:''},educationRecordIds:['old'],educationRecords:[{...old,id:'old',startMonth:null,endMonth:null,skills:[],media:[],attachmentsInspected:true}],ownershipVerified:true as const,introCaptured:true as const,aboutCaptured:true as const,educationListCaptured:true as const};
   const events:string[]=[];
-  const port={preflight:async()=>{},deleteRecord:async()=>{(document.querySelector('#delete') as HTMLButtonElement).click()},addRecord:async(item:ReturnType<typeof make>)=>{(document.querySelector('#school') as HTMLInputElement).value=item.school;(document.querySelector('#add') as HTMLButtonElement).click()},readRecords:async()=>Array.from(document.querySelectorAll('#education li')).map(el=>({...make(el.textContent||''),startMonth:null,endMonth:null}))};
+  const port={preflight:async()=>{},editRecord:async(_id:string,_before:ReturnType<typeof make>,item:ReturnType<typeof make>)=>{document.querySelector('[data-id=old]')!.textContent=item.school},deleteRecord:async()=>{(document.querySelector('#delete') as HTMLButtonElement).click()},addRecord:async(item:ReturnType<typeof make>)=>{(document.querySelector('#school') as HTMLInputElement).value=item.school;(document.querySelector('#add') as HTMLButtonElement).click()},readRecords:async()=>Array.from(document.querySelectorAll('#education li')).map(el=>({...make(el.textContent||''),startMonth:null,endMonth:null}))};
   const progress=await runEducation(planEducation('fixture',url,original,target),original,target,port,async p=>{events.push(`${p.status}:${p.inFlight?.kind??'none'}:${p.next}`)});
   return {progress,events};
  });
- expect(result.progress.status).toBe('complete');expect(result.events).toEqual(['running:delete:0','running:none:1','running:add:1','running:none:2','complete:none:2']);
+ expect(result.progress.status).toBe('complete');expect(result.events).toEqual(['running:edit:0','running:none:1','complete:none:1']);
  await expect(page.locator('#education li')).toHaveText(['New school']);
 });

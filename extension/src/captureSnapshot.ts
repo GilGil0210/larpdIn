@@ -29,6 +29,9 @@ export async function captureSnapshot(profileUrl:string,sources:CaptureSources=l
  async function collect(){
   const intro=introDetails.parse(await sources.intro(owner));
   const about=await sources.about();assertOwner(about.profileUrl,owner);
+  // Empty text does not establish whether the section exists. Until the live
+  // adapter can recreate that distinction, do not risk an irreversible change.
+  if(!about.about.trim())throw new Error('An empty or absent About section cannot yet be restored reliably');
   const education=await sources.education();assertOwner(education.profileUrl,owner);
   if(!education.listComplete)throw new Error('Education list completeness could not be verified');
   const records=z.array(educationRecord).parse(education.records);

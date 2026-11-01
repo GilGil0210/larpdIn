@@ -3,11 +3,11 @@ export function inspectLinkedInForm() {
  const url=new URL(location.href);
  if(url.origin!=='https://www.linkedin.com' || !/^\/in\/[^/]+\//.test(url.pathname)) throw new Error('Open your LinkedIn profile editor first.');
  const root=document.querySelector('dialog[open], [role="dialog"]') ?? document.querySelector('main') ?? document.body;
- const controls=Array.from(root.querySelectorAll<HTMLInputElement|HTMLTextAreaElement|HTMLSelectElement>('input,textarea,select'));
- const fields=controls.filter(el=>el.type!=='hidden' && el.type!=='password').map(el=>{
-  const labels=Array.from(el.labels??[]).map(label=>{const copy=label.cloneNode(true) as HTMLElement;copy.querySelectorAll('input,textarea,select,button').forEach(child=>child.remove());return copy.textContent?.trim() ?? '';}).filter(Boolean);
+ const controls=Array.from(root.querySelectorAll<HTMLInputElement|HTMLTextAreaElement|HTMLSelectElement|HTMLElement>('input,textarea,select,[contenteditable="true"][role="textbox"]'));
+ const fields=controls.filter(el=>!('type' in el) || (el.type!=='hidden' && el.type!=='password')).map(el=>{
+  const labels=Array.from(('labels' in el?el.labels:null)??[]).map(label=>{const copy=label.cloneNode(true) as HTMLElement;copy.querySelectorAll('input,textarea,select,button').forEach(child=>child.remove());return copy.textContent?.trim() ?? '';}).filter(Boolean);
   const referenced=(el.getAttribute('aria-labelledby') || '').split(/\s+/).filter(Boolean).map(id=>document.getElementById(id)?.textContent?.trim() || '').join(' ').trim();
-  return {label:el.getAttribute('aria-label') || referenced || labels.join(' ') || '',value:el.value,tag:el.tagName.toLowerCase(),type:el.type};
+  return {label:el.getAttribute('aria-label') || referenced || labels.join(' ') || '',value:'value' in el?String(el.value):el.textContent||'',tag:el.tagName.toLowerCase(),type:'type' in el?String(el.type):'contenteditable'};
  });
  return {url:url.origin+url.pathname,title:document.title,fields};
 }

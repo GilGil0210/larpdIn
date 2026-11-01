@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc --noEmit && vite build && esbuild src/editBridge.ts --bundle --format=iife --target=chrome120 --outfile=dist/editBridge.js",
+    "build": "tsc --noEmit && vite build && esbuild src/editBridge.ts --bundle --format=iife --target=chrome120 --outfile=dist/editBridge.js && esbuild src/background.ts --bundle --format=iife --target=chrome120 --outfile=dist/background.js",
     "test": "vitest run src",
     "mock": "node mock/server.js",
     "test:e2e": "playwright test"

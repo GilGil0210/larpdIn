@@ -8,3 +8,5 @@ Observed on the signed-in English desktop profile on 2026-11-01. These are UI ob
 - The inspected profile has an Add a summary link when About is absent. Existing About editing and autocomplete behaviors remain to be inspected.
 
 No form was saved during inspection.
+
+Additional read-only inspection on 2026-11-01: the education detail view exposes both a record link and an edit link to the same record. Its Add education link uses a detail-page route. The accessibility tree did not expose a total count or an end-of-list indicator, so the single visible record is not evidence of exhaustion. The intro headline appeared as an editable text area in accessibility, but the earlier input/textarea/select-only diagnostic omitted it; the underlying markup and editing behavior still need live verification. No values were changed.

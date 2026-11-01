@@ -9,7 +9,8 @@
     "activeTab"
   ],
   "host_permissions": [
-    "https://*/*",
+    "https://www.linkedin.com/*",
+    "https://larpdin-backend.onrender.com/*",
     "http://localhost/*",
     "http://127.0.0.1/*"
   ],
@@ -21,5 +22,8 @@
   },
   "background": {
     "service_worker": "background.js"
-  }
+  },
+  "optional_host_permissions": [
+    "https://*/*"
+  ]
 }

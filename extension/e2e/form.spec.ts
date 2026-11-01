@@ -89,3 +89,10 @@ test('recognizes the observed empty LinkedIn education attachment containers',as
  await page.goto('https://www.linkedin.com/in/example/details/education/edit/forms/123/');const {readEducationEditor}=await import('../src/scanEducation');expect((await page.evaluate(readEducationEditor)).attachmentsInspected).toBe(true);
  await page.locator('ul[componentkey="skillsComponentRef"]').evaluate(el=>el.insertAdjacentHTML('beforeend','<li>Skill</li>'));expect((await page.evaluate(readEducationEditor)).attachmentsInspected).toBe(false);
 });
+
+test('collection traversal expands load-more and rejects unresolved pagination and loading',async({page})=>{
+ await page.route('https://www.linkedin.com/**',route=>route.fulfill({contentType:'text/html',body:'<main><div role="list"><div role="listitem" aria-setsize="1" aria-posinset="1"><a href="/in/example/details/education/edit/forms/1/">Edit</a></div></div><button onclick="this.remove()">Load more</button></main>'}));
+ await page.goto('https://www.linkedin.com/in/example/details/education/');const {educationListIsComplete,advanceEducationCollection}=await import('../src/scanEducation');
+ expect(await page.evaluate(educationListIsComplete)).toBe(false);expect(await page.evaluate(advanceEducationCollection)).toBe(true);expect(await page.evaluate(educationListIsComplete)).toBe(true);
+ await page.locator('main').evaluate(el=>el.insertAdjacentHTML('beforeend','<div aria-busy="true"></div>'));expect(await page.evaluate(educationListIsComplete)).toBe(false);
+});

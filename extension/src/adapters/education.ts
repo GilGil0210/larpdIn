@@ -1,4 +1,4 @@
-import {findButton,findField} from '../form';
+import {findButton,findField,fieldValue} from '../form';
 import type {z} from 'zod';
 import type {educationRecord} from '../snapshot';
 type RecordValue=z.infer<typeof educationRecord>;
@@ -6,13 +6,13 @@ type RecordValue=z.infer<typeof educationRecord>;
 /** Values read from a single edit form are partial until attachment inspection is implemented. */
 export function readEducation(root:ParentNode,id:string,dates:{startMonth:number|null;startYear:number|null;endMonth:number|null;endYear:number|null}):RecordValue {
  if(!id) throw new Error('Education record identity is missing');
- const school=findField(root,'School').value;
+ const school=fieldValue(findField(root,'School'));
  if(!school.trim()) throw new Error('Education school is empty');
- const degree=findField(root,'Degree').value;
- const fieldOfStudy=findField(root,'Field of study').value;
- const grade=findField(root,'Grade').value;
- const activities=findField(root,'Activities and societies').value;
- const description=findField(root,'Description').value;
+ const degree=fieldValue(findField(root,'Degree'));
+ const fieldOfStudy=fieldValue(findField(root,'Field of study'));
+ const grade=fieldValue(findField(root,'Grade'));
+ const activities=fieldValue(findField(root,'Activities and societies'));
+ const description=fieldValue(findField(root,'Description'));
  findButton(root,'Save');
  return {id,school,degree,fieldOfStudy,grade,activities,description,...dates,skills:[],media:[],attachmentsInspected:false};
 }

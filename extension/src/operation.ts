@@ -37,4 +37,4 @@ export function finishSection(op:Operation,key:Section,result:'verified'|'failed
  const sections={...op.sections,[key]:result}; return {...op,sections,status:result==='verified'?(Object.values(sections).every(v=>v==='verified')?'complete':'running'):'failed',...(error?{error}:{})};
 }
 export async function persistOperation(op:Operation):Promise<void> {await chrome.storage.local.set({[`operation:${profileKey(op.profileUrl)}`]:operation.parse(op)});}
-export async function loadOperation(url:string):Promise<Operation|null> {const key=`operation:${profileKey(url)}`;const data=await chrome.storage.local.get(key);if(!data[key])return null;const result=recover(operation.parse(data[key]));await chrome.storage.local.set({[key]:result});return result;}
+export async function loadOperation(url:string):Promise<Operation|null> {const key=`operation:${profileKey(url)}`;const data=await chrome.storage.local.get(key);if(!data[key])return null;return operation.parse(data[key]);}

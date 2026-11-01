@@ -18,6 +18,8 @@ export function educationListIsComplete():boolean {
  const url=new URL(location.href),match=url.pathname.match(/^\/in\/([^/]+)\/details\/education\/?$/);
  if(url.origin!=='https://www.linkedin.com'||!match)return false;
  const prefix=`/in/${match[1]}/details/education/edit/forms/`;
+ const main=document.querySelector('main');if(!main||main.querySelector('[aria-busy="true"], [role="progressbar"], [data-placeholder], [data-lazy-mount-id]:empty, [class*="skeleton" i]'))return false;
+ if(Array.from(main.querySelectorAll<HTMLElement>('button,a')).some(el=>/^(show more|load more|next)$/i.test((el.getAttribute('aria-label')||el.textContent||'').trim())&&!el.hasAttribute('disabled')&&el.getAttribute('aria-disabled')!=='true'))return false;
  const links=Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href]')).filter(a=>{try{const u=new URL(a.href);return u.origin===url.origin&&u.pathname.startsWith(prefix)&&/^\d+\/?$/.test(u.pathname.slice(prefix.length))}catch{return false}});
  if(!links.length){const statuses=Array.from(document.querySelectorAll('[role="status"]')).filter(el=>/^no education (records|entries)[.!]?$/i.test((el.textContent||'').trim()));return statuses.length===1}
  const byPath=new Map<string,HTMLElement>();
@@ -28,6 +30,15 @@ export function educationListIsComplete():boolean {
  const size=Number(items[0].getAttribute('aria-setsize'));if(!Number.isInteger(size)||size!==items.length)return false;
  const positions=items.map(item=>Number(item.getAttribute('aria-posinset'))).sort((a,b)=>a-b);
  return items.every(item=>Number(item.getAttribute('aria-setsize'))===size)&&positions.every((pos,index)=>pos===index+1);
+}
+/** Advance one explicitly named collection control or scroll to trigger lazy loading. */
+export function advanceEducationCollection():boolean {
+ const main=document.querySelector('main');if(!main)throw new Error('Education collection is unavailable');
+ if(main.querySelector('[aria-busy="true"], [role="progressbar"]'))return false;
+ const controls=Array.from(main.querySelectorAll<HTMLButtonElement>('button')).filter(button=>!button.disabled&&/^(show more|load more)$/i.test((button.getAttribute('aria-label')||button.textContent||'').trim()));
+ if(controls.length>1)throw new Error('Education pagination controls are ambiguous');
+ if(controls.length===1){controls[0].click();return true}
+ window.scrollTo(0,document.documentElement.scrollHeight);return false;
 }
 export function readEducationEditor(){
  const url=new URL(location.href),path=url.pathname.match(/^\/in\/([^/]+)\/details\/education\/edit\/forms\/(\d+)\/?$/);
@@ -60,5 +71,15 @@ async function readWhenReady<T>(id:number,fn:()=>T,timeoutMs:number):Promise<T>{
 /** Imports visible records for generation only. It cannot establish restoration completeness. */
 export async function scanEducation(current:Profile,timeoutMs=15000):Promise<{profileUrl:string;content:Profile;educationRecords:z.infer<typeof educationRecord>[];listComplete:boolean}> {
  const owner=await resolveOwnProfile();const tab=await chrome.tabs.create({url:new URL('details/education/',owner).href,active:false});if(tab.id===undefined)throw new Error('Could not open education list');const id=tab.id;
- try {const links=await readWhenReady(id,findEducationEditors,timeoutMs);const listComplete=await readWhenReady(id,educationListIsComplete,timeoutMs);const records: z.infer<typeof educationRecord>[]=[];for(const link of links){await chrome.tabs.update(id,{url:link});const result=await readWhenReady(id,readEducationEditor,timeoutMs);assertOwner(result.profileUrl,owner);if(new URL(link).pathname!==new URL(`details/education/edit/forms/${result.id}/`,owner).pathname)throw new Error('Unexpected education record');const parsed=education.parse(result.content);records.push(educationRecord.parse({...parsed,id:result.id,startMonth:result.startMonth,endMonth:result.endMonth,skills:[],media:[],attachmentsInspected:result.attachmentsInspected}))}return {profileUrl:owner,content:{...current,education:records.map(({school,degree,fieldOfStudy,startYear,endYear,grade,activities,description})=>({school,degree,fieldOfStudy,startYear,endYear,grade,activities,description}))},educationRecords:records,listComplete}} finally {await chrome.tabs.remove(id).catch(()=>{})}
+ try {let links:string[]=[],listComplete=false,prior:string[]|null=null;const end=Date.now()+timeoutMs;let lastError:unknown;
+  while(Date.now()<end){try{
+   links=await readWhenReady(id,findEducationEditors,Math.min(2000,Math.max(250,end-Date.now())));
+   const complete=await readWhenReady(id,educationListIsComplete,Math.min(2000,Math.max(250,end-Date.now())));
+   if(complete&&prior&&JSON.stringify(prior)===JSON.stringify(links)){listComplete=true;break}
+   prior=complete?[...links]:null;
+   await chrome.scripting.executeScript({target:{tabId:id},func:advanceEducationCollection});
+  }catch(error){lastError=error;prior=null}
+  await new Promise(resolve=>setTimeout(resolve,350));}
+  if(!links.length&&!listComplete&&lastError)throw lastError;
+  const records: z.infer<typeof educationRecord>[]=[];for(const link of links){await chrome.tabs.update(id,{url:link});const result=await readWhenReady(id,readEducationEditor,timeoutMs);assertOwner(result.profileUrl,owner);if(new URL(link).pathname!==new URL(`details/education/edit/forms/${result.id}/`,owner).pathname)throw new Error('Unexpected education record');const parsed=education.parse(result.content);records.push(educationRecord.parse({...parsed,id:result.id,startMonth:result.startMonth,endMonth:result.endMonth,skills:[],media:[],attachmentsInspected:result.attachmentsInspected}))}return {profileUrl:owner,content:{...current,education:records.map(({school,degree,fieldOfStudy,startYear,endYear,grade,activities,description})=>({school,degree,fieldOfStudy,startYear,endYear,grade,activities,description}))},educationRecords:records,listComplete}} finally {await chrome.tabs.remove(id).catch(()=>{})}
 }

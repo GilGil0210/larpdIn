@@ -1,15 +1,16 @@
 /** DOM helpers for LinkedIn's English desktop forms. Fail closed on missing or ambiguous controls. */
-type TextControl = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+type TextControl = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | HTMLElement;
+export function fieldValue(el:TextControl):string {return 'value' in el?String(el.value):el.textContent||''}
 function labelOf(el:TextControl):string {
  const explicit=el.getAttribute('aria-label')?.trim();
  if(explicit) return explicit;
  const labelled=el.getAttribute('aria-labelledby');
  if(labelled){const text=labelled.split(/\s+/).map(id=>el.ownerDocument.getElementById(id)?.textContent?.trim() ?? '').join(' ').trim();if(text)return text;}
- return Array.from(el.labels ?? []).map(label=>{const copy=label.cloneNode(true) as HTMLElement;copy.querySelectorAll('input,textarea,select,button').forEach(child=>child.remove());return copy.textContent?.trim() ?? '';}).join(' ').trim();
+ return Array.from(('labels' in el?el.labels:null) ?? []).map(label=>{const copy=label.cloneNode(true) as HTMLElement;copy.querySelectorAll('input,textarea,select,button').forEach(child=>child.remove());return copy.textContent?.trim() ?? '';}).join(' ').trim();
 }
 const normalize=(s:string)=>s.replace(/\s+/g,' ').replace(/\s*\*\s*$/,'').trim().toLowerCase();
 export function findField(root:ParentNode,label:string):TextControl {
- const matches=Array.from(root.querySelectorAll<TextControl>('input,textarea,select')).filter(el=>!el.disabled && el.type!=='hidden' && normalize(labelOf(el))===normalize(label));
+ const matches=Array.from(root.querySelectorAll<TextControl>('input,textarea,select,[contenteditable="true"][role="textbox"]')).filter(el=>(!('disabled' in el)||!el.disabled) && (!('type' in el)||el.type!=='hidden') && normalize(labelOf(el))===normalize(label));
  if(matches.length!==1) throw new Error(`Expected one ${label} field, found ${matches.length}`);
  return matches[0];
 }
@@ -21,6 +22,7 @@ export function findButton(root:ParentNode,label:string):HTMLButtonElement {
 export function setText(field:TextControl,value:string):void {
  if(field instanceof field.ownerDocument.defaultView!.HTMLSelectElement) throw new Error('Select controls require an explicit option');
  const view=field.ownerDocument.defaultView!;
+ if(!(field instanceof view.HTMLInputElement)&&!(field instanceof view.HTMLTextAreaElement)){if(field.getAttribute('contenteditable')!=='true')throw new Error('Expected an editable text field');field.focus();field.textContent=value;field.dispatchEvent(new view.InputEvent('input',{bubbles:true,inputType:'insertText',data:value}));field.dispatchEvent(new view.Event('change',{bubbles:true}));if(fieldValue(field)!==value)throw new Error('Field did not accept value');return}
  const proto=field instanceof view.HTMLTextAreaElement ? view.HTMLTextAreaElement.prototype : view.HTMLInputElement.prototype;
  const setter=Object.getOwnPropertyDescriptor(proto,'value')?.set;
  if(!setter) throw new Error('Native value setter unavailable');

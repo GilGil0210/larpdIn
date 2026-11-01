@@ -1,4 +1,4 @@
-import {createOperation,loadOperation,persistOperation,type Operation,type Section} from './operation';
+import {createOperation,loadOperation,persistOperation,recover,type Operation,type Section} from './operation';
 import {loadHistory,saveOriginal,commitSwitch,commitRestore} from './history';
 import {profileKey} from './storage';
 import {snapshot,type Snapshot} from './snapshot';
@@ -36,8 +36,11 @@ export async function browserLock<T>(name:string,work:()=>Promise<T>):Promise<T>
 /** Recover by recapturing the actual state and starting a new restore; never replay the interrupted operation. */
 export async function restoreInterrupted(profileUrl:string,deps:SwitchDependencies):Promise<Operation>{
  return deps.lock(`larpdin:${profileKey(profileUrl)}`,async()=>{
-  const previous=await loadOperation(profileUrl);
+  let previous=await loadOperation(profileUrl);
   if(!previous || previous.status==='complete')throw new Error('There is no interrupted switch to restore');
+  // The profile lock ensures no switch in this runtime is still executing.
+  // Record uncertainty before attempting a fresh capture.
+  if(previous.status==='running'){previous=recover(previous);await persistOperation(previous)}
   const history=await loadHistory(profileUrl);if(!history)throw new Error('Original snapshot is missing');
   const current=snapshot.parse(await deps.capture(profileUrl));
   if(profileKey(current.profileUrl)!==profileKey(profileUrl))throw new Error('Captured profile does not match the requested profile');
