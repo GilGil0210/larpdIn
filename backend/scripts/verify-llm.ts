@@ -1,9 +1,10 @@
 /**
- * Verifies real access for each configured provider (Featherless primary, Gemini fallback):
- *   FEATHERLESS_API_KEY=... GEMINI_API_KEY=... npm run verify:llm
+ * Verifies real access for each enabled provider (Gemini by default):
+ *   GEMINI_API_KEY=... npm run verify:llm
  *   npm run verify:llm -- gemini        # only one provider
  * For each: checks the model is listed, then runs one full persona generation
- * from examples/generate-request.json and validates it against the contract.
+ * from examples/generate-request.json, validates it against the contract, and
+ * checks every option keeps the brief's Toronto / University of Toronto requirements.
  */
 import { readFileSync } from "node:fs";
 import { loadConfig, type LlmConfig } from "../src/config.js";
@@ -47,8 +48,18 @@ async function verify(llm: LlmConfig): Promise<boolean> {
   try {
     const result = await generate(request, AbortSignal.timeout(config.generationDeadlineMs));
     console.log(`OK: 3 valid personas in ${((Date.now() - started) / 1000).toFixed(1)}s`);
+    let requirementsOk = true;
     for (const p of result.personas) {
-      console.log(`- ${p.name} | ${p.content.headline} | ${p.content.location} | ${p.content.education.map((e) => e.school).join("; ")}`);
+      const inToronto = /toronto/i.test(p.content.location);
+      const atUofT = p.content.education.some((e) => /university of toronto/i.test(e.school));
+      requirementsOk &&= inToronto && atUofT;
+      console.log(
+        `- ${inToronto && atUofT ? "PASS" : "FAIL"} ${p.name} | ${p.content.headline} | ${p.content.location} | ${p.content.education.map((e) => e.school).join("; ")}`,
+      );
+    }
+    if (!requirementsOk) {
+      console.error("FAILED: not every option is in Toronto with a University of Toronto education entry");
+      return false;
     }
     if (llm.timeoutMs && Date.now() - started > llm.timeoutMs) {
       console.log(`WARNING: slower than its ${llm.timeoutMs / 1000}s fallback budget; the server would fall back`);

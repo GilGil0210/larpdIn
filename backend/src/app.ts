@@ -5,7 +5,7 @@ import { isConfigured, type Config } from "./config.js";
 import { GenerateRequestSchema } from "./contract.js";
 import { ApiError, GenerationError, UpstreamRateLimitError, UpstreamTimeoutError } from "./errors.js";
 import { createFallbackGenerator } from "./fallback.js";
-import { createChatClient } from "./llm.js";
+import { createChatClient, type ChatClientOptions } from "./llm.js";
 import { createPersonaGenerator, type GeneratePersonas } from "./personas.js";
 import { SlidingWindowLimiter } from "./rateLimit.js";
 import { withSignal } from "./signal.js";
@@ -18,6 +18,8 @@ export type AppOptions = {
   now?: () => number;
   /** fetch override for provider HTTP calls (tests). */
   fetchImpl?: typeof fetch;
+  /** Extra chat client options, e.g. retry policy or an instant sleep (tests). */
+  chatOptions?: Partial<Omit<ChatClientOptions, "apiKey" | "model" | "baseUrl">>;
   /** false disables logging; a stream captures it (tests). Defaults to stdout. */
   logger?: false | { level?: string; stream?: NodeJS.WritableStream };
 };
@@ -67,7 +69,9 @@ export function buildApp(options: AppOptions): FastifyInstance {
       config.providers.map((provider) => ({
         name: provider.provider,
         timeoutMs: provider.timeoutMs,
-        generate: createPersonaGenerator(createChatClient({ ...provider, fetchImpl: options.fetchImpl })),
+        generate: createPersonaGenerator(
+          createChatClient({ ...provider, fetchImpl: options.fetchImpl, ...options.chatOptions }),
+        ),
       })),
       { cooldownMs: config.providerCooldownMs, now },
     );
@@ -176,13 +180,20 @@ export function buildApp(options: AppOptions): FastifyInstance {
     }
 
     const controller = new AbortController();
+    const deadlineAt = Date.now() + config.generationDeadlineMs;
     const timer = setTimeout(() => controller.abort(new UpstreamTimeoutError()), config.generationDeadlineMs);
     const onClose = () => {
       if (!reply.raw.writableFinished) controller.abort();
     };
     reply.raw.on("close", onClose);
     try {
-      const result = await withSignal(generate(parsed.data, controller.signal, request.log), controller.signal);
+      const result = await withSignal(
+        generate(parsed.data, controller.signal, {
+          log: request.log,
+          deadlineAt,
+        }),
+        controller.signal,
+      );
       return reply.code(200).send(result);
     } finally {
       clearTimeout(timer);

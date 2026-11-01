@@ -5,7 +5,7 @@ import { createChatClient, type ChatClient } from "../src/llm.js";
 import { createPersonaGenerator } from "../src/personas.js";
 import {
   API_KEY,
-  GEMINI_KEY,
+  FEATHERLESS_KEY,
   TOKEN,
   auth,
   exampleRequest,
@@ -64,7 +64,7 @@ describe("GET /health", () => {
     expect(res.json()).toEqual({ status: "ok" });
   });
 
-  it.each<Record<string, string>>([{ FEATHERLESS_API_KEY: "" }, { DEMO_ACCESS_TOKEN: "" }])("returns 503 when config is missing (%o)", async (env) => {
+  it.each<Record<string, string>>([{ GEMINI_API_KEY: "" }, { DEMO_ACCESS_TOKEN: "" }])("returns 503 when config is missing (%o)", async (env) => {
     app = makeApp({ config: testConfig(env) });
     const res = await app.inject({ method: "GET", url: "/health" });
     expect(res.statusCode).toBe(503);
@@ -178,37 +178,26 @@ describe("generation through the LLM client (mocked HTTP)", () => {
     expect(body.personas).toHaveLength(3);
 
     expect(calls).toHaveLength(1);
-    expect(calls[0]!.url).toBe("https://api.featherless.ai/v1/chat/completions");
+    expect(calls[0]!.url).toBe("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions");
     expect((calls[0]!.init.headers as Record<string, string>).Authorization).toBe(`Bearer ${API_KEY}`);
     const sent = JSON.parse(String(calls[0]!.init.body));
-    expect(sent.model).toBe("Qwen/Qwen2.5-7B-Instruct");
-    expect(sent).not.toHaveProperty("response_format");
-    expect(sent).not.toHaveProperty("reasoning_effort");
+    expect(sent.model).toBe("gemini-3.5-flash");
+    expect(sent.response_format).toEqual({ type: "json_object" });
+    expect(sent.reasoning_effort).toBe("low");
+    expect(sent.max_tokens).toBe(8192);
     expect(sent.messages[1].content).toContain("University of Toronto");
   });
 
   it("uses the configured model", async () => {
-    const { app: a, calls } = llmApp([() => jsonResponse(llmCompletion())], {
-      FEATHERLESS_MODEL: "meta-llama/Meta-Llama-3.1-8B-Instruct",
-    });
+    const { app: a, calls } = llmApp([() => jsonResponse(llmCompletion())], { GEMINI_MODEL: "gemini-2.5-flash" });
     await post(a, exampleRequest());
-    expect(JSON.parse(String(calls[0]!.init.body)).model).toBe("meta-llama/Meta-Llama-3.1-8B-Instruct");
+    expect(JSON.parse(String(calls[0]!.init.body)).model).toBe("gemini-2.5-flash");
   });
 
-  it("works with only Gemini configured, sending Gemini parameters", async () => {
-    const { app: a, calls } = llmApp([() => jsonResponse(llmCompletion())], {
-      FEATHERLESS_API_KEY: "",
-      GEMINI_API_KEY: GEMINI_KEY,
-    });
-    const res = await post(a, exampleRequest());
-    expect(res.statusCode).toBe(200);
-    expect(calls[0]!.url).toBe("https://generativelanguage.googleapis.com/v1beta/openai/chat/completions");
-    expect((calls[0]!.init.headers as Record<string, string>).Authorization).toBe(`Bearer ${GEMINI_KEY}`);
-    const sent = JSON.parse(String(calls[0]!.init.body));
-    expect(sent.model).toBe("gemini-flash-latest");
-    expect(sent.response_format).toEqual({ type: "json_object" });
-    expect(sent.reasoning_effort).toBe("low");
-    expect(sent.max_tokens).toBe(8192);
+  it("ignores a Featherless key unless Featherless is explicitly enabled", async () => {
+    const { app: a, calls } = llmApp([() => jsonResponse(llmCompletion())], { FEATHERLESS_API_KEY: FEATHERLESS_KEY });
+    expect((await post(a, exampleRequest())).statusCode).toBe(200);
+    expect(calls.map((c) => c.url)).toEqual(["https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"]);
   });
 
   it("repairs malformed output once and succeeds", async () => {
@@ -246,16 +235,18 @@ describe("generation through the LLM client (mocked HTTP)", () => {
     expect(calls).toHaveLength(2);
   });
 
-  it("maps upstream HTTP errors to 502", async () => {
-    const { app: a } = llmApp([() => jsonResponse({ error: "boom" }, 500)]);
+  it("maps persistent upstream 5xx to 502 after two retries", async () => {
+    const { app: a, calls } = llmApp([() => jsonResponse({ error: "boom" }, 500)]);
     const res = await post(a, exampleRequest());
     expect(res.statusCode).toBe(502);
     expect(res.json().error.code).toBe("GENERATION_FAILED");
+    expect(calls).toHaveLength(3);
   });
 
-  it("maps upstream 429 to 429 with Retry-After", async () => {
-    const { app: a } = llmApp([() => jsonResponse({}, 429, { "retry-after": "17" })]);
+  it("maps persistent upstream 429 to 429 with Retry-After after two retries", async () => {
+    const { app: a, calls } = llmApp([() => jsonResponse({}, 429, { "retry-after": "17" })]);
     const res = await post(a, exampleRequest());
+    expect(calls).toHaveLength(3);
     expect(res.statusCode).toBe(429);
     expect(res.json().error.code).toBe("RATE_LIMITED");
     expect(res.headers["retry-after"]).toBe("17");
@@ -410,7 +401,7 @@ describe("CORS for the extension", () => {
 describe("configuration guard", () => {
   it("returns 503 for generation when not configured", async () => {
     const generate = vi.fn();
-    app = makeApp({ config: testConfig({ FEATHERLESS_API_KEY: "" }), generate });
+    app = makeApp({ config: testConfig({ GEMINI_API_KEY: "" }), generate });
     const res = await post(app, exampleRequest());
     expect(res.statusCode).toBe(503);
     expect(res.json().error.code).toBe("SERVICE_UNAVAILABLE");
@@ -421,8 +412,8 @@ describe("configuration guard", () => {
 describe("log redaction", () => {
   it("never logs credentials, prompts, profile content, or generated content", async () => {
     const logs = logCapture();
-    // Both providers configured, so fallback paths are logged too.
-    const config = testConfig({ GEMINI_API_KEY: GEMINI_KEY });
+    // Both providers enabled, so fallback and retry paths are logged too.
+    const config = testConfig({ LLM_PROVIDERS: "gemini,featherless", FEATHERLESS_API_KEY: FEATHERLESS_KEY });
     const responses = [
       () => jsonResponse(llmCompletion()),
       () => jsonResponse(completionWith("garbage")),
@@ -445,7 +436,7 @@ describe("log redaction", () => {
     for (const secret of [
       TOKEN,
       API_KEY,
-      GEMINI_KEY,
+      FEATHERLESS_KEY,
       "wrong-token-value",
       "LEAKY-BRIEF-IN-BAD-JSON",
       req.brief,
@@ -457,5 +448,90 @@ describe("log redaction", () => {
     ]) {
       expect(text).not.toContain(secret);
     }
+  });
+});
+
+describe("transient provider retries", () => {
+  function retryApp(responses: Array<() => Response>, deadlineMs = 90_000) {
+    const sleeps: number[] = [];
+    const { fetchImpl, calls } = llmFetch(responses);
+    app = makeApp({
+      config: testConfig({}, { generationDeadlineMs: deadlineMs }),
+      fetchImpl,
+      chatOptions: {
+        random: () => 0.5,
+        sleep: async (ms) => {
+          sleeps.push(ms);
+        },
+      },
+    });
+    return { app, calls, sleeps };
+  }
+
+  it.each([408, 429, 500, 502, 503, 504])("retries HTTP %i and then succeeds", async (status) => {
+    const { app: a, calls } = retryApp([() => jsonResponse({}, status), () => jsonResponse(llmCompletion())]);
+    const res = await post(a, exampleRequest());
+    expect(res.statusCode).toBe(200);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("retries network errors", async () => {
+    const { app: a, calls } = retryApp([
+      () => {
+        throw new TypeError("fetch failed");
+      },
+      () => jsonResponse(llmCompletion()),
+    ]);
+    expect((await post(a, exampleRequest())).statusCode).toBe(200);
+    expect(calls).toHaveLength(2);
+  });
+
+  it.each([400, 401, 403, 404])("does not retry HTTP %i (auth/input errors)", async (status) => {
+    const { app: a, calls } = retryApp([() => jsonResponse({}, status), () => jsonResponse(llmCompletion())]);
+    const res = await post(a, exampleRequest());
+    expect(res.statusCode).toBe(502);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("uses exponential backoff with jitter when there is no Retry-After", async () => {
+    const { app: a, sleeps } = retryApp([() => jsonResponse({}, 503)]);
+    await post(a, exampleRequest());
+    // base 1s doubling; equal jitter with random()=0.5 gives 75% of each step.
+    expect(sleeps).toEqual([750, 1500]);
+  });
+
+  it("honours Retry-After seconds", async () => {
+    const { app: a, sleeps } = retryApp([
+      () => jsonResponse({}, 429, { "retry-after": "3" }),
+      () => jsonResponse(llmCompletion()),
+    ]);
+    expect((await post(a, exampleRequest())).statusCode).toBe(200);
+    expect(sleeps).toEqual([3000]);
+  });
+
+  it("gives up immediately when Retry-After would overrun the 90s deadline", async () => {
+    const { app: a, calls, sleeps } = retryApp([() => jsonResponse({}, 429, { "retry-after": "120" })]);
+    const res = await post(a, exampleRequest());
+    expect(res.statusCode).toBe(429);
+    expect(res.headers["retry-after"]).toBe("120");
+    expect(calls).toHaveLength(1);
+    expect(sleeps).toEqual([]);
+  });
+
+  it("does not retry when too little of the deadline remains", async () => {
+    const { app: a, calls } = retryApp([() => jsonResponse({}, 503), () => jsonResponse(llmCompletion())], 3_000);
+    const res = await post(a, exampleRequest());
+    expect(res.statusCode).toBe(502);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("retries within the repair attempt too, still capped at one repair", async () => {
+    const { app: a, calls } = retryApp([
+      () => jsonResponse(completionWith("not json")),
+      () => jsonResponse({}, 503),
+      () => jsonResponse(llmCompletion()),
+    ]);
+    expect((await post(a, exampleRequest())).statusCode).toBe(200);
+    expect(calls).toHaveLength(3);
   });
 });

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { GenerateResponseSchema } from "../src/contract.js";
-import { GEMINI_KEY, auth, exampleRequest, llmCompletion, makeApp, testConfig } from "./helpers.js";
+import { FEATHERLESS_KEY, auth, exampleRequest, llmCompletion, makeApp, testConfig } from "./helpers.js";
 
 let app: FastifyInstance | undefined;
 afterEach(async () => {
@@ -56,7 +56,12 @@ function build(
   now?: () => number,
 ) {
   const { fetchImpl, calls } = providers(behaviour);
-  app = makeApp({ config: testConfig({ GEMINI_API_KEY: GEMINI_KEY, ...env }, overrides), fetchImpl, now });
+  // Optional two-provider setup (Featherless first, Gemini fallback); production is Gemini-only.
+  app = makeApp({
+    config: testConfig({ LLM_PROVIDERS: "featherless,gemini", FEATHERLESS_API_KEY: FEATHERLESS_KEY, ...env }, overrides),
+    fetchImpl,
+    now,
+  });
   return { app, calls };
 }
 
@@ -69,7 +74,7 @@ const generate = (a: FastifyInstance, ip = "10.0.0.1") =>
     remoteAddress: ip,
   });
 
-describe("Featherless primary with Gemini fallback", () => {
+describe("optional Featherless-first setup with Gemini fallback", () => {
   it("uses only Featherless when it works", async () => {
     const { app: a, calls } = build({ featherless: "ok", gemini: "ok" });
     const res = await generate(a);
@@ -77,12 +82,13 @@ describe("Featherless primary with Gemini fallback", () => {
     expect(calls).toEqual(["featherless"]);
   });
 
-  it.each<Behaviour>(["error", "ratelimit"])("falls back to Gemini when Featherless returns %s", async (b) => {
+  it.each<Behaviour>(["error", "ratelimit"])("falls back to Gemini when Featherless keeps returning %s", async (b) => {
     const { app: a, calls } = build({ featherless: b, gemini: "ok" });
     const res = await generate(a);
     expect(res.statusCode).toBe(200);
     expect(GenerateResponseSchema.safeParse(res.json()).success).toBe(true);
-    expect(calls).toEqual(["featherless", "gemini"]);
+    // Two retries on Featherless first, then the fallback.
+    expect(calls).toEqual(["featherless", "featherless", "featherless", "gemini"]);
   });
 
   it("falls back after Featherless output stays invalid through its repair attempt", async () => {
@@ -122,7 +128,7 @@ describe("Featherless primary with Gemini fallback", () => {
     const res = await generate(a);
     expect(res.statusCode).toBe(502);
     expect(res.json().error.code).toBe("GENERATION_FAILED");
-    expect(calls).toEqual(["featherless", "gemini", "gemini"]);
+    expect(calls).toEqual(["featherless", "featherless", "featherless", "gemini", "gemini"]);
   });
 
   it("returns 429 when both providers are rate limited", async () => {
@@ -137,10 +143,10 @@ describe("Featherless primary with Gemini fallback", () => {
     const { app: a, calls } = build({ featherless: "error", gemini: "ok" }, { PROVIDER_COOLDOWN_MS: "60000" }, {}, () => now);
     await generate(a, "10.0.0.1");
     await generate(a, "10.0.0.2");
-    expect(calls).toEqual(["featherless", "gemini", "gemini"]);
+    expect(calls).toEqual(["featherless", "featherless", "featherless", "gemini", "gemini"]);
     now += 60_001;
     await generate(a, "10.0.0.3");
-    expect(calls.slice(3)).toEqual(["featherless", "gemini"]);
+    expect(calls.slice(5)).toEqual(["featherless", "featherless", "featherless", "gemini"]);
   });
 
   it("does not put Featherless on cooldown for bad output", async () => {
@@ -154,7 +160,7 @@ describe("Featherless primary with Gemini fallback", () => {
     const { app: a, calls } = build({ featherless: "error", gemini: "ok" }, { GEMINI_API_KEY: "" });
     const res = await generate(a);
     expect(res.statusCode).toBe(502);
-    expect(calls).toEqual(["featherless"]);
+    expect(calls).toEqual(["featherless", "featherless", "featherless"]);
   });
 
   it("gives a sole Featherless provider the full deadline instead of its fallback budget", async () => {
