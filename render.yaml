@@ -1,0 +1,27 @@
+# Render Blueprint for the Larpdin backend. https://render.com/docs/blueprint-spec
+# Rate limits are in-memory, so this service must run as exactly one instance.
+services:
+  - type: web
+    name: larpdin-backend
+    runtime: node
+    plan: free # upgrade to "starter" to avoid cold starts (free instances sleep after ~15 min idle)
+    region: oregon
+    rootDir: backend
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    numInstances: 1
+    autoDeploy: true
+    buildFilter:
+      paths:
+        - backend/**
+        - render.yaml
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: FEATHERLESS_MODEL
+        value: Qwen/Qwen2.5-7B-Instruct
+      - key: FEATHERLESS_API_KEY
+        sync: false # entered in the Render dashboard on first deploy; never committed
+      - key: DEMO_ACCESS_TOKEN
+        generateValue: true # Render generates a random token; copy it from the dashboard
