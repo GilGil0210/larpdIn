@@ -9,20 +9,20 @@ export function submitAboutForm({owner,expected,target}:{owner:string;expected:s
  const expectedUrl=new URL(owner);
  if(url.origin!=='https://www.linkedin.com'||!path||expectedUrl.origin!==url.origin||expectedUrl.pathname.replace(/\/$/,'').toLowerCase()!==`/in/${path[1]}`.toLowerCase())throw new Error('Unexpected About editor');
  const root=document.querySelector('dialog[open], [role="dialog"]')??document.querySelector('main')??document.body;
- const fields=Array.from(root.querySelectorAll<HTMLTextAreaElement>('textarea')).filter(el=>!el.disabled);
+ const fields=Array.from(root.querySelectorAll<HTMLTextAreaElement|HTMLElement>('textarea,[contenteditable]:not([contenteditable="false"])')).filter(el=>!('disabled' in el)||!el.disabled);
  const buttons=Array.from(root.querySelectorAll<HTMLButtonElement>('button')).filter(el=>!el.disabled&&(el.getAttribute('aria-label')||el.textContent||'').trim()==='Save');
  if(fields.length!==1||buttons.length!==1)throw new Error('About editor controls are ambiguous');
- const field=fields[0];if(field.value!==expected)throw new Error('About changed since the snapshot');
- const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')?.set;if(!setter)throw new Error('Text setter unavailable');
- setter.call(field,target);field.dispatchEvent(new Event('input',{bubbles:true}));field.dispatchEvent(new Event('change',{bubbles:true}));
- if(field.value!==target)throw new Error('About field did not accept the target');
+ const field=fields[0];const read=()=>field instanceof HTMLTextAreaElement?field.value:field.textContent||'';if(read()!==expected)throw new Error('About changed since the snapshot');
+ if(field instanceof HTMLTextAreaElement){const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')?.set;if(!setter)throw new Error('Text setter unavailable');setter.call(field,target)}else{field.focus();field.textContent=target}
+ field.dispatchEvent(new Event('input',{bubbles:true}));field.dispatchEvent(new Event('change',{bubbles:true}));
+ if(read()!==target)throw new Error('About field did not accept the target');
  buttons[0].click();return true;
 }
 /** Returns true only after the editor is no longer active. */
 export function aboutEditorClosed():boolean {
  if(!/\/edit\/forms\/summary\//.test(location.pathname))return true;
  const root=document.querySelector('dialog[open], [role="dialog"]')??document.querySelector('main')??document.body;
- return !Array.from(root.querySelectorAll('textarea')).length;
+ return !Array.from(root.querySelectorAll('textarea,[contenteditable]:not([contenteditable="false"])')).length;
 }
 async function poll<T>(id:number,read:()=>Promise<T>,accept:(value:T)=>boolean,timeout=15000):Promise<T>{const end=Date.now()+timeout;let last:unknown;while(Date.now()<end){try{const tab=await chrome.tabs.get(id);if(tab.status==='complete'){const result=await read();if(accept(result))return result}}catch(error){last=error}await new Promise(resolve=>setTimeout(resolve,250))}throw new Error(`About editor did not become ready${last instanceof Error?`: ${last.message}`:''}`)}
 async function openEditor(owner:string):Promise<number>{

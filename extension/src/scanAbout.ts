@@ -25,7 +25,7 @@ export function importAbout(inspection:ReturnType<typeof inspectLinkedInForm>,ow
  const url=new URL(inspection.url);const match=url.pathname.match(/^\/in\/([^/]+)\/edit\/forms\/summary\/[^/]+\/?$/);
  if(url.origin!=='https://www.linkedin.com'||!match) throw new Error('Expected a LinkedIn About editor');
  assertOwner(`https://www.linkedin.com/in/${match[1]}/`,owner);
- const fields=inspection.fields.filter(field=>field.tag==='textarea');
+ const fields=inspection.fields.filter(field=>field.tag==='textarea'||field.type==='contenteditable');
  if(fields.length!==1) throw new Error(`Expected one About text field, found ${fields.length}`);
  return {...current,about:fields[0].value};
 }

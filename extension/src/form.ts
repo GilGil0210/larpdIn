@@ -10,7 +10,7 @@ function labelOf(el:TextControl):string {
 }
 const normalize=(s:string)=>s.replace(/\s+/g,' ').replace(/,\s*maximum\s+[\d,]+\s+characters?\s*$/i,'').replace(/\s*\*\s*$/,'').trim().toLowerCase();
 export function findField(root:ParentNode,label:string):TextControl {
- const matches=Array.from(root.querySelectorAll<TextControl>('input,textarea,select,[contenteditable="true"]')).filter(el=>(!('disabled' in el)||!el.disabled) && (!('type' in el)||el.type!=='hidden') && normalize(labelOf(el))===normalize(label));
+ const matches=Array.from(root.querySelectorAll<TextControl>('input,textarea,select,[contenteditable]:not([contenteditable="false"])')).filter(el=>(!('disabled' in el)||!el.disabled) && (!('type' in el)||el.type!=='hidden') && normalize(labelOf(el))===normalize(label));
  if(matches.length!==1) throw new Error(`Expected one ${label} field, found ${matches.length}`);
  return matches[0];
 }
@@ -22,7 +22,7 @@ export function findButton(root:ParentNode,label:string):HTMLButtonElement {
 export function setText(field:TextControl,value:string):void {
  if(field instanceof field.ownerDocument.defaultView!.HTMLSelectElement) throw new Error('Select controls require an explicit option');
  const view=field.ownerDocument.defaultView!;
- if(!(field instanceof view.HTMLInputElement)&&!(field instanceof view.HTMLTextAreaElement)){if(field.getAttribute('contenteditable')!=='true')throw new Error('Expected an editable text field');field.focus();field.textContent=value;field.dispatchEvent(new view.InputEvent('input',{bubbles:true,inputType:'insertText',data:value}));field.dispatchEvent(new view.Event('change',{bubbles:true}));if(fieldValue(field)!==value)throw new Error('Field did not accept value');return}
+ if(!(field instanceof view.HTMLInputElement)&&!(field instanceof view.HTMLTextAreaElement)){if(!field.hasAttribute('contenteditable')||field.getAttribute('contenteditable')==='false')throw new Error('Expected an editable text field');field.focus();field.textContent=value;field.dispatchEvent(new view.InputEvent('input',{bubbles:true,inputType:'insertText',data:value}));field.dispatchEvent(new view.Event('change',{bubbles:true}));if(fieldValue(field)!==value)throw new Error('Field did not accept value');return}
  const proto=field instanceof view.HTMLTextAreaElement ? view.HTMLTextAreaElement.prototype : view.HTMLInputElement.prototype;
  const setter=Object.getOwnPropertyDescriptor(proto,'value')?.set;
  if(!setter) throw new Error('Native value setter unavailable');
