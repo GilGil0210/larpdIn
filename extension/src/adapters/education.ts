@@ -38,13 +38,20 @@ export async function prepareEducation(root:ParentNode,raw:Education,dates:DateC
  findButton(root,'Save');
  const monthLabel=(control:HTMLSelectElement,value:number|null)=>{if(value===null)return 'Month';const names=['January','February','March','April','May','June','July','August','September','October','November','December'];const options=Array.from(control.options).filter(option=>!option.disabled&&(option.textContent?.trim()===String(value)||option.textContent?.trim()===names[value-1]));if(options.length!==1)throw new Error(`Expected one month option ${value}, found ${options.length}`);return options[0].textContent!.trim()};
  const desired:[HTMLSelectElement,string][]=[[dates.startMonth,monthLabel(dates.startMonth,months.startMonth)],[dates.startYear,record.startYear===null?'Year':String(record.startYear)],[dates.endMonth,monthLabel(dates.endMonth,months.endMonth)],[dates.endYear,record.endYear===null?'Year':String(record.endYear)]];
- for(const [control,label] of desired){
+ // LinkedIn limits End year to a window around the selected start year, so the end-year option is checked after the start year is set.
+ for(const [control,label] of desired.slice(0,3)){
   if(!root.contains(control) || control.disabled) throw new Error('Education date control is unavailable');
   const options=Array.from(control.options).filter(option=>option.textContent?.trim()===label && !option.disabled);
   if(options.length!==1) throw new Error(`Expected one date option ${label}, found ${options.length}`);
  }
+ if(!root.contains(dates.endYear) || dates.endYear.disabled) throw new Error('Education date control is unavailable');
  // School must be selected from LinkedIn's suggestions; free text is not proof of a valid school.
  if(fieldValue(school)!==record.school)await selectAutocomplete(school,record.school);
- setText(degree,record.degree);setText(field,record.fieldOfStudy);setText(grade,record.grade);setText(activities,record.activities);setText(description,record.description);
- for(const [control,label] of desired) selectOption(control,label);
+ // LinkedIn keeps a previously selected degree/field entity unless a suggestion is picked; free text alone does not replace it.
+ const pick=async(control:HTMLElement,value:string)=>{if(fieldValue(control)===value)return;if(!value){setText(control,'');return}try{await selectAutocomplete(control,value,2500)}catch(error){if(!(error instanceof Error)||!/^(No exact suggestion|Autocomplete does not identify|Autocomplete must be)/.test(error.message))throw error;setText(control,value)}};
+ await pick(degree,record.degree);await pick(field,record.fieldOfStudy);setText(grade,record.grade);setText(activities,record.activities);setText(description,record.description);
+ for(const [control,label] of desired.slice(0,3)) selectOption(control,label);
+ const [endYear,endLabel]=desired[3];const view=endYear.ownerDocument.defaultView!;
+ for(let n=0;n<40&&!Array.from(endYear.options).some(option=>option.textContent?.trim()===endLabel&&!option.disabled);n++)await new Promise(resolve=>view.setTimeout(resolve,50));
+ selectOption(endYear,endLabel);
 }

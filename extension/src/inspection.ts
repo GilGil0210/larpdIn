@@ -7,7 +7,8 @@ export function inspectLinkedInForm() {
  const fields=controls.filter(el=>!('type' in el) || (el.type!=='hidden' && el.type!=='password')).map(el=>{
   const labels=Array.from(('labels' in el?el.labels:null)??[]).map(label=>{const copy=label.cloneNode(true) as HTMLElement;copy.querySelectorAll('input,textarea,select,button').forEach(child=>child.remove());return copy.textContent?.trim() ?? '';}).filter(Boolean);
   const referenced=(el.getAttribute('aria-labelledby') || '').split(/\s+/).filter(Boolean).map(id=>document.getElementById(id)?.textContent?.trim() || '').join(' ').trim();
-  return {label:el.getAttribute('aria-label') || referenced || labels.join(' ') || '',value:'value' in el?String(el.value):el.textContent||'',tag:el.tagName.toLowerCase(),type:'type' in el?String(el.type):'contenteditable'};
+  const paragraphs=Array.from(el.children);const rich=!('value' in el)&&paragraphs.length>0&&paragraphs.every(child=>child.tagName==='P');
+  return {label:el.getAttribute('aria-label') || referenced || labels.join(' ') || '',value:'value' in el?String(el.value):rich?paragraphs.map(p=>p.textContent||'').join('\n'):el.textContent||'',tag:el.tagName.toLowerCase(),type:'type' in el?String(el.type):'contenteditable'};
  });
  return {url:url.origin+url.pathname,title:document.title,fields};
 }

@@ -40,24 +40,33 @@ export function selectOption(field:TextControl,label:string):void {
  if(field.value!==options[0].value) throw new Error('Option was not selected');
 }
 
+/** First non-empty text block of an option; LinkedIn renders the name, then a subtitle such as "School • Canada". */
+function primaryText(el:HTMLElement):string {const walker=el.ownerDocument.createTreeWalker(el,4);let node:Node|null;while((node=walker.nextNode())){const text=(node.textContent||'').trim();if(text)return text}return ''}
 /** Select a unique, exact suggestion from the list owned by this field. */
 export async function selectAutocomplete(field:TextControl,value:string,timeoutMs=5000):Promise<void> {
  const view=field.ownerDocument.defaultView!;
  if(!(field instanceof view.HTMLInputElement)) throw new Error('Autocomplete must be an input');
- const listId=field.getAttribute('aria-controls');
- if(!listId) throw new Error('Autocomplete does not identify its suggestion list');
- setText(field,value);
+ // LinkedIn's live typeahead links its list with aria-owns, and only after input starts.
+ const ownedList=()=>field.getAttribute('aria-controls')||field.getAttribute('aria-owns');
+ const initialId=ownedList();
+ if(!initialId && field.getAttribute('aria-autocomplete')!=='list') throw new Error('Autocomplete does not identify its suggestion list');
+ // LinkedIn searches poorly on a full "City, Region, Country" string; search the first segment and match the full value.
+ const query=value.includes(',')?value.split(',')[0].trim():value;
+ setText(field,query);
  const deadline=Date.now()+timeoutMs;
+ let listId=initialId||'';
  while(Date.now()<deadline){
-  const list=field.ownerDocument.getElementById(listId);
-  const matches=list ? Array.from(list.querySelectorAll<HTMLElement>('[role="option"]')).filter(el=>normalize(el.textContent || '')===normalize(value) && el.getAttribute('aria-disabled')!=='true' && !el.hidden && !el.closest('[aria-hidden="true"], [hidden]') && el.getClientRects().length>0 && view.getComputedStyle(el).visibility!=='hidden') : [];
+  listId=ownedList()||'';
+  const list=listId?field.ownerDocument.getElementById(listId):null;
+  const matches=list ? Array.from(list.querySelectorAll<HTMLElement>('[role="option"]')).filter(el=>(normalize(el.textContent || '')===normalize(value) || normalize(primaryText(el))===normalize(value)) && el.getAttribute('aria-disabled')!=='true' && !el.hidden && !el.closest('[aria-hidden="true"], [hidden]') && el.getClientRects().length>0 && view.getComputedStyle(el).visibility!=='hidden') : [];
   if(matches.length>1) throw new Error(`Ambiguous suggestion: ${value}`);
   if(matches.length===1){
    matches[0].click();
    // A typed string alone is not evidence that LinkedIn accepted a suggestion.
    await new Promise(resolve=>view.setTimeout(resolve,0));
    const selectedList=field.ownerDocument.getElementById(listId);
-   const closed=field.getAttribute('aria-expanded')==='false' || !selectedList || selectedList.hidden || selectedList.getAttribute('aria-hidden')==='true';
+   const visibleOptions=selectedList?Array.from(selectedList.querySelectorAll<HTMLElement>('[role="option"]')).filter(el=>el.getClientRects().length>0).length:0;
+   const closed=field.getAttribute('aria-expanded')==='false' || !selectedList || selectedList.hidden || selectedList.getAttribute('aria-hidden')==='true' || visibleOptions===0;
    if(normalize(field.value)!==normalize(value) || !closed) throw new Error('Autocomplete selection was not confirmed');
    return;
   }

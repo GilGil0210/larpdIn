@@ -1,10 +1,11 @@
+import {perfMark,perfReset} from './perf';
 import {createOperation,loadOperation,persistOperation,recover,type Operation,type Section} from './operation';
 import {loadHistory,saveOriginal,commitSwitch,commitRestore} from './history';
 import {profileKey} from './storage';
 import {interruptEducationProgress} from './educationProgress';
 import {reconcileSnapshot} from './reconciliation';
 import {snapshot,type Snapshot} from './snapshot';
-import {runOperation,type SectionAdapter} from './runner';
+import {runOperation,type RunOptions,type SectionAdapter} from './runner';
 import {candidate} from './contract';
 import {z} from 'zod';
 type Candidate=z.infer<typeof candidate>;
@@ -14,19 +15,26 @@ export interface SwitchDependencies {
  adapters(before:Snapshot,destination:Snapshot|undefined,operationId:string):Record<Section,SectionAdapter>;
  /** Lock must serialize all operations for the same profile, including recovery. */
  lock<T>(name:string,work:()=>Promise<T>):Promise<T>;
+ /** Optional runner settings (live LinkedIn uses a faster profile). */
+ run?:RunOptions;
 }
 /** Call only when capture and all adapters can establish complete restoration data. */
 export async function executeSwitch(profileUrl:string,selection:Selection,deps:SwitchDependencies):Promise<Operation>{
  return deps.lock(`larpdin:${profileKey(profileUrl)}`,async()=>{
-  const previous=await loadOperation(profileUrl);if(previous && previous.status!=='complete')throw new Error('An earlier switch requires recovery before another can start');
-  const before=snapshot.parse(await deps.capture(profileUrl));if(profileKey(before.profileUrl)!==profileKey(profileUrl))throw new Error('Captured profile does not match the requested profile');
+  const previous=await loadOperation(profileUrl);
+  // A failed operation with no uncertain submission is fully known: archive it and start from a fresh capture.
+  // Uncertain submissions still need recovery or an explicit dismissal by the user (dismissFailedOperation).
+  const settledFailure=previous?.status==='failed'&&!Object.values(previous.sections).some(state=>state==='uncertain'||state==='submitting');
+  if(previous && settledFailure)await chrome.storage.local.set({[`operation-archive:${profileKey(profileUrl)}:${previous.id}`]:previous});
+  else if(previous && previous.status!=='complete')throw new Error('An earlier switch requires recovery before another can start');
+  perfReset();perfMark('capture:start');const before=snapshot.parse(await deps.capture(profileUrl));if(profileKey(before.profileUrl)!==profileKey(profileUrl))throw new Error('Captured profile does not match the requested profile');
   const history=await saveOriginal(before);let destination:Snapshot|undefined,personaId:string|null=null,target;
   if(selection.kind==='persona'){personaId=zodUuid(selection.id);target=candidate.parse(selection.candidate).content}
   else {const stored=await loadHistory(profileUrl);if(!stored)throw new Error('Original snapshot is missing');destination=selection.kind==='original'?stored.original:stored.undo??undefined;if(!destination)throw new Error('No previous switch to undo');if(destination.educationComplete===false||!destination.content.about.trim())throw new Error('This backup is incomplete; automatic restoration is unavailable. Restore from your separate backup.');personaId=selection.kind==='original'?null:stored.undoPersonaId;target=destination.content}
   const op=createOperation(profileUrl,target,before,{destination,personaId});await persistOperation(op);
   // Persist a distinct finalization state until history is updated. A crash here requires recovery.
   const persistProgress=async(value:Operation)=>persistOperation(value.status==='complete'?{...value,status:'committing'}:value);
-  const result=await runOperation(op,deps.adapters(before,destination,op.id),persistProgress);
+  perfMark('capture:done');const result=await runOperation(op,deps.adapters(before,destination,op.id),persistProgress,deps.run);perfMark(`finished:${result.status}`);
   if(result.status==='complete'){if(selection.kind==='persona')await commitSwitch(result,personaId!);else await commitRestore(result,personaId);await persistOperation(result)}
   return result;
  });
@@ -55,8 +63,19 @@ export async function restoreInterrupted(profileUrl:string,deps:SwitchDependenci
   await chrome.storage.local.set({[`operation-archive:${profileKey(profileUrl)}:${previous.id}`]:previous});
   await persistOperation(op);
   const persistProgress=async(value:Operation)=>persistOperation(value.status==='complete'?{...value,status:'committing'}:value);
-  const result=await runOperation(op,deps.adapters(current,destination,op.id),persistProgress);
+  const result=await runOperation(op,deps.adapters(current,destination,op.id),persistProgress,deps.run);
   if(result.status==='complete'){await commitRestore(result,null);await persistOperation(result)}
   return result;
+ });
+}
+
+/** User-confirmed dismissal of a failed operation after they have checked the live profile. Archives, never deletes, the checkpoint. */
+export async function dismissFailedOperation(profileUrl:string,lock:<T>(name:string,work:()=>Promise<T>)=>Promise<T>=browserLock):Promise<void>{
+ await lock(`larpdin:${profileKey(profileUrl)}`,async()=>{
+  const previous=await loadOperation(profileUrl);
+  if(!previous)return;
+  if(previous.status!=='failed')throw new Error('Only a failed switch can be dismissed');
+  await chrome.storage.local.set({[`operation-archive:${profileKey(profileUrl)}:${previous.id}`]:previous});
+  await chrome.storage.local.remove(`operation:${profileKey(profileUrl)}`);
  });
 }

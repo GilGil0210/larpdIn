@@ -36,20 +36,37 @@ export function planEducation(operationId:string,profileUrl:string,original:Snap
  return {operationId,profileUrl,steps:[...edits,...adds,...deletes],next:0,inFlight:null,status:'running'};
 }
 /** A step is persisted as in-flight before submission. A failure is never retried automatically. */
-export async function runEducation(plan:EducationProgress,original:Snapshot,target:EducationValue[],port:EducationPort,persist:(progress:EducationProgress)=>Promise<void>):Promise<EducationProgress> {
+/** Fast mode for live runs: skip the duplicate port preflight and check the list once after all steps instead of after each. */
+export type EducationRunOptions={checkEachStep?:boolean};
+export async function runEducation(plan:EducationProgress,original:Snapshot,target:EducationValue[],port:EducationPort,persist:(progress:EducationProgress)=>Promise<void>,options:EducationRunOptions={}):Promise<EducationProgress> {
+ const checkEachStep=options.checkEachStep??true;
  if(plan.status!=='running'||plan.inFlight||plan.next!==0) throw new Error('Education operation requires manual recovery');
  const expected=planEducation(plan.operationId,plan.profileUrl,original,target);
  if(JSON.stringify(plan.steps)!==JSON.stringify(expected.steps)) throw new Error('Education plan does not match the snapshot and target');
- await port.preflight(plan.profileUrl,original);
+ if(checkEachStep)await port.preflight(plan.profileUrl,original);
  let progress=plan;
  let expectedRecords=snapshotEducation(original);
- const canonical=(items:EducationValue[])=>items.map(x=>JSON.stringify(educationValue.parse(x))).sort();
+ // LinkedIn may store a selected field of study in capitals ("PSYCHOLOGY"); compare case-insensitively.
+ const canonical=(items:EducationValue[])=>items.map(x=>JSON.stringify(educationValue.parse(x)).toLowerCase()).sort();
  const assertRecords=async(expected:EducationValue[])=>{
   const actual=z.array(educationValue).parse(await port.readRecords());
   if(JSON.stringify(canonical(actual))!==JSON.stringify(canonical(expected))) throw new Error('Education list differs from the expected state');
  };
  // Check the baseline independently after preflight, before any submission.
  try {await assertRecords(expectedRecords);} catch(error){progress={...progress,status:'uncertain',error:String(error)};await persist(progress);return progress;}
+ if(!checkEachStep&&progress.steps.length>1){
+  // Each step touches a different record (or adds a new one) in its own tab, so they can run concurrently.
+  progress={...progress,inFlight:progress.steps[0]};await persist(progress);
+  try{
+   await Promise.all(progress.steps.map(async step=>{
+    if(step.kind==='delete')await port.deleteRecord(step.id);
+    else if(step.kind==='edit')await port.editRecord(step.id,step.before,step.record);
+    else await port.addRecord(step.record);
+   }));
+   await assertRecords(target.map(x=>educationValue.parse(x)));
+  }catch(error){progress={...progress,status:'uncertain',error:String(error)};await persist(progress);return progress;}
+  progress={...progress,next:progress.steps.length,inFlight:null};await persist(progress);
+ } else
  for(const step of progress.steps){
   progress={...progress,inFlight:step};await persist(progress);
   try {
@@ -67,12 +84,12 @@ export async function runEducation(plan:EducationProgress,original:Snapshot,targ
     await port.editRecord(step.id,step.before,step.record);
     expectedRecords=expectedRecords.map((x,i)=>i===index?step.record:x);
    } else {await port.addRecord(step.record);expectedRecords=[...expectedRecords,step.record];}
-   // Do not start another change until the prior change is independently observed.
-   await assertRecords(expectedRecords);
+   // Do not start another change until the prior change is independently observed (fast mode checks once at the end).
+   if(checkEachStep||step===progress.steps[progress.steps.length-1])await assertRecords(expectedRecords);
   } catch(error){progress={...progress,status:'uncertain',error:String(error)};await persist(progress);return progress;}
   progress={...progress,next:progress.next+1,inFlight:null};await persist(progress);
  }
- try {const actual=z.array(educationValue).parse(await port.readRecords());if(JSON.stringify(actual)!==JSON.stringify(target))throw new Error('Education order differs from the requested order')} catch(error){progress={...progress,status:'uncertain',error:String(error)};await persist(progress);return progress}
+ try {const actual=z.array(educationValue).parse(await port.readRecords());if(JSON.stringify(actual).toLowerCase()!==JSON.stringify(target.map(x=>educationValue.parse(x))).toLowerCase())throw new Error('Education order differs from the requested order')} catch(error){progress={...progress,status:'uncertain',error:String(error)};await persist(progress);return progress}
  progress={...progress,status:'complete'};
  await persist(progress);return progress;
 }

@@ -5,7 +5,8 @@ import {makeEducationAdapter} from './adapters/liveEducation';
 import {browserLock,type SwitchDependencies} from './switchCoordinator';
 /** LinkedIn dependencies stay gated by captureSnapshot's completeness checks. */
 export const liveSwitch:SwitchDependencies={
- capture:captureSnapshot,
+ capture:profileUrl=>captureSnapshot(profileUrl,undefined,{passes:1}),
+ run:{revalidate:false,trustCaptureForNoop:true,parallel:true},
  lock:browserLock,
- adapters(before,destination,operationId){return {intro:makeIntroAdapter(before.profileUrl,before.introDetails,destination),about:makeAboutAdapter(before.profileUrl,before.content),education:makeEducationAdapter(before.profileUrl,before,destination,operationId)}}
+ adapters(before,destination,operationId){return {intro:makeIntroAdapter(before.profileUrl,before.introDetails,destination),about:makeAboutAdapter(before.profileUrl,before.content),education:makeEducationAdapter(before.profileUrl,before,destination,operationId,{checkEachStep:false})}}
 };

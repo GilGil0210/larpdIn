@@ -1,6 +1,12 @@
 import {profileKey} from './storage';
 /** Resolve the current account in an isolated tab. Never infer ownership from an edit-looking URL. */
-export async function resolveOwnProfile(timeoutMs=20000):Promise<string> {
+let cachedOwner:{value:string;at:number}|null=null;
+/** Owner checks repeat many times during one switch; reuse a result for a short window instead of reloading /in/me each time. */
+export async function resolveOwnProfile(timeoutMs=20000,maxAgeMs=120000):Promise<string> {
+ if(cachedOwner&&Date.now()-cachedOwner.at<maxAgeMs)return cachedOwner.value;
+ const value=await resolveOwnProfileUncached(timeoutMs);cachedOwner={value,at:Date.now()};return value;
+}
+async function resolveOwnProfileUncached(timeoutMs:number):Promise<string> {
  const tab=await chrome.tabs.create({url:'https://www.linkedin.com/in/me/',active:false});
  if(tab.id===undefined) throw new Error('Unable to open LinkedIn account check');
  const id=tab.id;
