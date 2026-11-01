@@ -16,6 +16,7 @@ test('unpacked extension generates and saves a mock persona',async()=>{
   let worker=context.serviceWorkers()[0]; if(!worker) worker=await context.waitForEvent('serviceworker');
   const id=new URL(worker.url()).host;
   const page=await context.newPage();await page.goto(`chrome-extension://${id}/index.html`);
+  await page.getByLabel('Backend URL').fill('http://localhost:8787');await page.getByLabel('Backend URL').blur();
   await page.getByLabel('Demo access token').fill('demo');
   await page.getByLabel('LinkedIn profile URL').fill('https://www.linkedin.com/in/example/');
   await page.getByLabel('Brief').fill('A fictional profile');
