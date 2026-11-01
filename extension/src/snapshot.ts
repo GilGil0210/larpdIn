@@ -4,7 +4,7 @@ import {profileKey} from './storage';
 
 /** Each education editor must be visited and recorded; list identities come from the profile's education list. */
 export const educationRecord = z.object({
- id:z.string().min(1), school:z.string(), degree:z.string(), fieldOfStudy:z.string(),
+ id:z.string().min(1), school:z.string(), schoolIdentity:z.string().url().optional(), degree:z.string(), fieldOfStudy:z.string(),
  startYear:z.number().int().nullable(),endYear:z.number().int().nullable(),
  startMonth:z.number().int().min(1).max(12).nullable(),endMonth:z.number().int().min(1).max(12).nullable(),
  grade:z.string(),activities:z.string(),description:z.string(),

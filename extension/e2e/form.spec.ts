@@ -107,3 +107,8 @@ test('autocomplete ignores hidden matches and other fields suggestion lists',asy
  await page.locator('#visible').evaluate(el=>el.addEventListener('click',()=>{const input=document.querySelector('input')!;input.value='Example University';input.setAttribute('aria-expanded','false')}));
  await page.evaluate(async()=>{const {findField,selectAutocomplete}=await import('/src/form.ts');await selectAutocomplete(findField(document,'School'),'Example University',500)});await expect(page.getByLabel('School')).toHaveValue('Example University');
 });
+test('captures a school identity only from the same education record',async({page})=>{
+ await page.route('https://www.linkedin.com/**',route=>route.fulfill({contentType:'text/html',body:'<main><div role="listitem"><a href="/school/123/">School</a><a href="/in/example/details/education/edit/forms/1/">Edit</a></div></main>'}));
+ await page.goto('https://www.linkedin.com/in/example/details/education/');const {findEducationSchoolIdentities}=await import('../src/scanEducation');expect(await page.evaluate(findEducationSchoolIdentities)).toEqual({'1':'https://www.linkedin.com/school/123'});
+ await page.locator('[role=listitem]').evaluate(el=>el.insertAdjacentHTML('beforeend','<a href="/school/456/">Other</a>'));await expect(page.evaluate(findEducationSchoolIdentities)).rejects.toThrow(/ambiguous/);
+});
