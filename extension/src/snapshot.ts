@@ -14,7 +14,7 @@ export const educationRecord = z.object({
  attachmentsInspected:z.boolean()
 }).strict();
 export const introDetails=z.object({firstName:z.string(),lastName:z.string(),additionalName:z.string(),pronouns:z.string(),education:z.string(),headline:z.string(),country:z.string(),city:z.string(),industry:z.string()}).strict();
-export const snapshot = z.object({schemaVersion:z.literal(1).optional(),profileUrl:z.string(),capturedAt:z.string().datetime(),content:profile,introDetails,
+export const snapshot = z.object({schemaVersion:z.literal(1).optional(),educationComplete:z.boolean().optional(),profileUrl:z.string(),capturedAt:z.string().datetime(),content:profile,introDetails,
  educationRecordIds:z.array(z.string().min(1)), educationRecords:z.array(educationRecord),
  ownershipVerified:z.literal(true), introCaptured:z.literal(true),aboutCaptured:z.literal(true),educationListCaptured:z.literal(true)
 }).strict().superRefine((value,ctx)=>{
@@ -34,4 +34,4 @@ export const snapshot = z.object({schemaVersion:z.literal(1).optional(),profileU
 export type Snapshot=z.infer<typeof snapshot>;
 
 /** Captured attachments must not be discarded until their restoration is supported. */
-export function assertRestorable(value:Snapshot):void {const checked=snapshot.parse(value);if(!checked.content.about.trim())throw new Error('An empty or absent About section cannot yet be restored reliably');if(checked.educationRecords.some(record=>record.skills.length||record.media.length))throw new Error('Restoration of education skills or media is not supported yet');}
+export function assertRestorable(value:Snapshot):void {const checked=snapshot.parse(value);if(checked.educationRecords.some(record=>record.skills.length||record.media.length))throw new Error('Restoration of education skills or media is not supported yet');}

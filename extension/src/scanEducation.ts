@@ -14,7 +14,7 @@ export function findEducationEditors():string[] {
  return unique;
 }
 /** Capture school links only when the record container unambiguously owns one school. */
-export function findEducationSchoolIdentities():Record<string,string> {
+export function findEducationSchoolIdentities():{identities:Record<string,string>} {
  const url=new URL(location.href),match=url.pathname.match(/^\/in\/([^/]+)\/details\/education\/?$/);
  if(url.origin!=='https://www.linkedin.com'||!match)throw new Error('Expected the education list');
  const prefix=`/in/${match[1]}/details/education/edit/forms/`,result:Record<string,string>={};
@@ -23,9 +23,9 @@ export function findEducationSchoolIdentities():Record<string,string> {
   const id=target.pathname.slice(prefix.length).replace(/\/$/,'');if(!/^\d+$/.test(id))continue;
   const item=link.closest('[role="listitem"],li,[componentkey^="entity-collection-item"]');if(!item)continue;
   const schools=[...new Set(Array.from(item.querySelectorAll<HTMLAnchorElement>('a[href]')).map(a=>{try{const u=new URL(a.href);return u.origin===url.origin&&/^\/school\/[^/]+\/?$/.test(u.pathname)?u.origin+u.pathname.replace(/\/$/,''):''}catch{return ''}}).filter(Boolean))];
-  if(schools.length!==1||(result[id]&&result[id]!==schools[0]))throw new Error('Education school identity is ambiguous');result[id]=schools[0];
+  if(schools.length>1||(schools.length===1&&result[id]&&result[id]!==schools[0]))throw new Error('Education school identity is ambiguous');if(schools.length===1)result[id]=schools[0];
  }
- return result;
+ return {identities:result};
 }
 /** Require complete ARIA set metadata for every linked record; unknown layouts are not proof. */
 export function educationListIsComplete():boolean {
@@ -81,9 +81,9 @@ export function readEducationEditor(){
  const attachmentsInspected=linkedInEmpty||(explicitlyEmpty('Education skills')&&explicitlyEmpty('Education media'));
  return {profileUrl:`https://www.linkedin.com/in/${path[1]}/`,id:path[2],content:data,startMonth:month(selected[0]),endMonth:month(selected[2]),attachmentsInspected};
 }
-async function readWhenReady<T>(id:number,fn:()=>T,timeoutMs:number):Promise<T>{const end=Date.now()+timeoutMs;let error:unknown;while(Date.now()<end){try{const tab=await chrome.tabs.get(id);if(tab.status==='complete'){const result=await chrome.scripting.executeScript({target:{tabId:id},func:fn});if(result[0]?.result!==undefined)return result[0].result as T}}catch(e){error=e}await new Promise(resolve=>setTimeout(resolve,250))}throw new Error(`Could not scan education${error instanceof Error?`: ${error.message}`:''}`)}
+async function readWhenReady<T>(id:number,fn:()=>T,timeoutMs:number):Promise<T>{const end=Date.now()+timeoutMs;let error:unknown;while(Date.now()<end){try{const tab=await chrome.tabs.get(id);if(tab.status==='complete'){const result=await chrome.scripting.executeScript({target:{tabId:id},func:fn});if(result[0]?.result!=null)return result[0].result as T}}catch(e){error=e}await new Promise(resolve=>setTimeout(resolve,250))}throw new Error(`Could not scan education${error instanceof Error?`: ${error.message}`:''}`)}
 /** Imports visible records for generation only. It cannot establish restoration completeness. */
-export async function scanEducation(current:Profile,timeoutMs=15000):Promise<{profileUrl:string;content:Profile;educationRecords:z.infer<typeof educationRecord>[];listComplete:boolean}> {
+export async function scanEducation(current:Profile,timeoutMs=4000):Promise<{profileUrl:string;content:Profile;educationRecords:z.infer<typeof educationRecord>[];listComplete:boolean}> {
  const owner=await resolveOwnProfile();const tab=await chrome.tabs.create({url:new URL('details/education/',owner).href,active:false});if(tab.id===undefined)throw new Error('Could not open education list');const id=tab.id;
  try {let links:string[]=[],listComplete=false,prior:string[]|null=null;const end=Date.now()+timeoutMs;let lastError:unknown;
   while(Date.now()<end){try{
@@ -95,5 +95,5 @@ export async function scanEducation(current:Profile,timeoutMs=15000):Promise<{pr
   }catch(error){lastError=error;prior=null}
   await new Promise(resolve=>setTimeout(resolve,350));}
   if(!links.length&&!listComplete&&lastError)throw lastError;
-  const identities=await readWhenReady(id,findEducationSchoolIdentities,timeoutMs);const records: z.infer<typeof educationRecord>[]=[];for(const link of links){await chrome.tabs.update(id,{url:link});const result=await readWhenReady(id,readEducationEditor,timeoutMs);assertOwner(result.profileUrl,owner);if(new URL(link).pathname!==new URL(`details/education/edit/forms/${result.id}/`,owner).pathname)throw new Error('Unexpected education record');const parsed=education.parse(result.content);records.push(educationRecord.parse({...parsed,id:result.id,...(identities[result.id]?{schoolIdentity:identities[result.id]}:{}),startMonth:result.startMonth,endMonth:result.endMonth,skills:[],media:[],attachmentsInspected:result.attachmentsInspected}))}return {profileUrl:owner,content:{...current,education:records.map(({school,degree,fieldOfStudy,startYear,endYear,grade,activities,description})=>({school,degree,fieldOfStudy,startYear,endYear,grade,activities,description}))},educationRecords:records,listComplete}} finally {await chrome.tabs.remove(id).catch(()=>{})}
+  const {identities}=await readWhenReady(id,findEducationSchoolIdentities,timeoutMs);const records: z.infer<typeof educationRecord>[]=[];for(const link of links){await chrome.tabs.update(id,{url:link});const result=await readWhenReady(id,readEducationEditor,timeoutMs);assertOwner(result.profileUrl,owner);if(new URL(link).pathname!==new URL(`details/education/edit/forms/${result.id}/`,owner).pathname)throw new Error('Unexpected education record');const parsed=education.parse(result.content);records.push(educationRecord.parse({...parsed,id:result.id,...(identities[result.id]?{schoolIdentity:identities[result.id]}:{}),startMonth:result.startMonth,endMonth:result.endMonth,skills:[],media:[],attachmentsInspected:result.attachmentsInspected}))}return {profileUrl:owner,content:{...current,education:records.map(({school,degree,fieldOfStudy,startYear,endYear,grade,activities,description})=>({school,degree,fieldOfStudy,startYear,endYear,grade,activities,description}))},educationRecords:records,listComplete}} finally {await chrome.tabs.remove(id).catch(()=>{})}
 }

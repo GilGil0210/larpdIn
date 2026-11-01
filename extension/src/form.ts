@@ -10,7 +10,7 @@ function labelOf(el:TextControl):string {
 }
 const normalize=(s:string)=>s.replace(/\s+/g,' ').replace(/,\s*maximum\s+[\d,]+\s+characters?\s*$/i,'').replace(/\s*\*\s*$/,'').trim().toLowerCase();
 export function findField(root:ParentNode,label:string):TextControl {
- const matches=Array.from(root.querySelectorAll<TextControl>('input,textarea,select,[contenteditable="true"][role="textbox"]')).filter(el=>(!('disabled' in el)||!el.disabled) && (!('type' in el)||el.type!=='hidden') && normalize(labelOf(el))===normalize(label));
+ const matches=Array.from(root.querySelectorAll<TextControl>('input,textarea,select,[contenteditable="true"]')).filter(el=>(!('disabled' in el)||!el.disabled) && (!('type' in el)||el.type!=='hidden') && normalize(labelOf(el))===normalize(label));
  if(matches.length!==1) throw new Error(`Expected one ${label} field, found ${matches.length}`);
  return matches[0];
 }

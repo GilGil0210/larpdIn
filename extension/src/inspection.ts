@@ -3,7 +3,7 @@ export function inspectLinkedInForm() {
  const url=new URL(location.href);
  if(url.origin!=='https://www.linkedin.com' || !/^\/in\/[^/]+\//.test(url.pathname)) throw new Error('Open your LinkedIn profile editor first.');
  const root=document.querySelector('dialog[open], [role="dialog"]') ?? document.querySelector('main') ?? document.body;
- const controls=Array.from(root.querySelectorAll<HTMLInputElement|HTMLTextAreaElement|HTMLSelectElement|HTMLElement>('input,textarea,select,[contenteditable="true"][role="textbox"]'));
+ const controls=Array.from(root.querySelectorAll<HTMLInputElement|HTMLTextAreaElement|HTMLSelectElement|HTMLElement>('input,textarea,select,[contenteditable="true"]'));
  const fields=controls.filter(el=>!('type' in el) || (el.type!=='hidden' && el.type!=='password')).map(el=>{
   const labels=Array.from(('labels' in el?el.labels:null)??[]).map(label=>{const copy=label.cloneNode(true) as HTMLElement;copy.querySelectorAll('input,textarea,select,button').forEach(child=>child.remove());return copy.textContent?.trim() ?? '';}).filter(Boolean);
   const referenced=(el.getAttribute('aria-labelledby') || '').split(/\s+/).filter(Boolean).map(id=>document.getElementById(id)?.textContent?.trim() || '').join(' ').trim();

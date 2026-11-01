@@ -5,7 +5,7 @@ import type {candidate,education} from './contract';
 type Candidate=z.infer<typeof candidate>;
 type Education=z.infer<typeof education>;
 const emptyEducation=():Education=>({school:'',degree:'',fieldOfStudy:'',startYear:null,endYear:null,grade:'',activities:'',description:''});
-export function CandidateEditor({value,onChange,onSave,index}:{value:Candidate;onChange:(value:Candidate)=>void;onSave:()=>void;index:number}){
+export function CandidateEditor({value,onChange,onSave,onApply,disabled,index}:{value:Candidate;onChange:(value:Candidate)=>void;onSave:()=>void;onApply:()=>void;disabled:boolean;index:number}){
  const update=(patch:Partial<Candidate>)=>onChange({...value,...patch});
  const updateContent=(patch:Partial<Candidate['content']>)=>update({content:{...value.content,...patch}});
  const updateEducation=(i:number,patch:Partial<Education>)=>updateContent({education:value.content.education.map((item,j)=>i===j?{...item,...patch}:item)});
@@ -28,6 +28,6 @@ export function CandidateEditor({value,onChange,onSave,index}:{value:Candidate;o
    <button type="button" onClick={()=>updateContent({education:value.content.education.filter((_,j)=>i!==j)})}>Remove education {i+1}</button>
   </fieldset>)}
   <button type="button" onClick={()=>updateContent({education:[...value.content.education,emptyEducation()]})}>Add education</button>{' '}
-  <button type="button" onClick={onSave}>Save candidate</button>
+  <button type="button" onClick={onSave}>Save candidate</button> <button type="button" disabled={disabled} onClick={onApply}>Apply candidate</button>
  </section>
 }

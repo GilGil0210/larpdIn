@@ -37,7 +37,7 @@ test('unpacked extension scans a synthetic signed-in profile through isolated HT
   await page.getByRole('button',{name:'Load saved personas'}).click();
   await page.getByRole('button',{name:'Apply Test persona'}).click();
   await expect(page.getByRole('status')).toHaveText('Switch stopped',{timeout:60000});
-  await expect(page.getByRole('alert')).toContainText('Education list completeness could not be verified');
+  await expect(page.getByRole('alert')).toContainText('Education attachment capture is incomplete');
   expect(writes).toBe(0);
 
   const tabId=await page.evaluate(async()=>{const tab=await chrome.tabs.create({url:'https://www.linkedin.com/in/example/edit/intro/',active:false});return tab.id!});

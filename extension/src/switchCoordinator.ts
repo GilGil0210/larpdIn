@@ -22,7 +22,7 @@ export async function executeSwitch(profileUrl:string,selection:Selection,deps:S
   const before=snapshot.parse(await deps.capture(profileUrl));if(profileKey(before.profileUrl)!==profileKey(profileUrl))throw new Error('Captured profile does not match the requested profile');
   const history=await saveOriginal(before);let destination:Snapshot|undefined,personaId:string|null=null,target;
   if(selection.kind==='persona'){personaId=zodUuid(selection.id);target=candidate.parse(selection.candidate).content}
-  else {const stored=await loadHistory(profileUrl);if(!stored)throw new Error('Original snapshot is missing');destination=selection.kind==='original'?stored.original:stored.undo??undefined;if(!destination)throw new Error('No previous switch to undo');personaId=selection.kind==='original'?null:stored.undoPersonaId;target=destination.content}
+  else {const stored=await loadHistory(profileUrl);if(!stored)throw new Error('Original snapshot is missing');destination=selection.kind==='original'?stored.original:stored.undo??undefined;if(!destination)throw new Error('No previous switch to undo');if(destination.educationComplete===false||!destination.content.about.trim())throw new Error('This backup is incomplete; automatic restoration is unavailable. Restore from your separate backup.');personaId=selection.kind==='original'?null:stored.undoPersonaId;target=destination.content}
   const op=createOperation(profileUrl,target,before,{destination,personaId});await persistOperation(op);
   // Persist a distinct finalization state until history is updated. A crash here requires recovery.
   const persistProgress=async(value:Operation)=>persistOperation(value.status==='complete'?{...value,status:'committing'}:value);
@@ -49,7 +49,7 @@ export async function restoreInterrupted(profileUrl:string,deps:SwitchDependenci
   if(profileKey(current.profileUrl)!==profileKey(profileUrl))throw new Error('Captured profile does not match the requested profile');
   const reconciliation=reconcileSnapshot(previous,current);
   await chrome.storage.local.set({[`reconciliation:${profileKey(profileUrl)}:${previous.id}`]:reconciliation});
-  const destination=history.original;
+  const destination=history.original;if(destination.educationComplete===false||!destination.content.about.trim())throw new Error('This backup is incomplete; automatic restoration is unavailable. Restore from your separate backup.');
   const op=createOperation(profileUrl,destination.content,current,{destination,personaId:null,recoveryOf:previous.id});
   // The old checkpoint must survive even if a new attempt is interrupted.
   await chrome.storage.local.set({[`operation-archive:${profileKey(profileUrl)}:${previous.id}`]:previous});

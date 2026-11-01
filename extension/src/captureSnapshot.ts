@@ -29,17 +29,13 @@ export async function captureSnapshot(profileUrl:string,sources:CaptureSources=l
  async function collect(){
   const intro=introDetails.parse(await sources.intro(owner));
   const about=await sources.about();assertOwner(about.profileUrl,owner);
-  // Empty text does not establish whether the section exists. Until the live
-  // adapter can recreate that distinction, do not risk an irreversible change.
-  if(!about.about.trim())throw new Error('An empty or absent About section cannot yet be restored reliably');
   const education=await sources.education();assertOwner(education.profileUrl,owner);
-  if(!education.listComplete)throw new Error('Education list completeness could not be verified');
   const records=z.array(educationRecord).parse(education.records);
   if(records.some(record=>!record.attachmentsInspected))throw new Error('Education attachment capture is incomplete');
-  return {intro,about:about.about,records};
+  return {intro,about:about.about,records,listComplete:education.listComplete};
  }
  const first=await collect(),second=await collect();assertOwner(await sources.owner(),owner);
  if(JSON.stringify(first)!==JSON.stringify(second))throw new Error('Profile changed during snapshot capture');
  const content:Profile={headline:first.intro.headline,location:first.intro.city||first.intro.country,industry:first.intro.industry,about:first.about,education:first.records.map(({school,degree,fieldOfStudy,startYear,endYear,grade,activities,description})=>({school,degree,fieldOfStudy,startYear,endYear,grade,activities,description}))};
- return snapshot.parse({schemaVersion:1,profileUrl:owner,capturedAt:new Date().toISOString(),content,introDetails:first.intro,educationRecordIds:first.records.map(record=>record.id),educationRecords:first.records,ownershipVerified:true,introCaptured:true,aboutCaptured:true,educationListCaptured:true});
+ return snapshot.parse({schemaVersion:1,educationComplete:first.listComplete,profileUrl:owner,capturedAt:new Date().toISOString(),content,introDetails:first.intro,educationRecordIds:first.records.map(record=>record.id),educationRecords:first.records,ownershipVerified:true,introCaptured:true,aboutCaptured:true,educationListCaptured:true});
 }
