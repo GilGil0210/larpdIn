@@ -13,7 +13,7 @@ export type Operation = z.infer<typeof operation>;
 export function createOperation(profileUrl:string,target:unknown,before:unknown,options:{destination?:unknown;personaId?:string|null;recoveryOf?:string}={}):Operation {
  const original=snapshot.parse(before); assertRestorable(original); if(profileKey(profileUrl)!==profileKey(original.profileUrl)) throw new Error('Snapshot belongs to a different profile');
  const destination=options.destination===undefined?undefined:snapshot.parse(options.destination);if(destination)assertRestorable(destination);if(destination && profileKey(destination.profileUrl)!==profileKey(profileUrl))throw new Error('Destination belongs to a different profile');
- const desired=profile.parse(target);if(destination && JSON.stringify(destination.content)!==JSON.stringify(desired))throw new Error('Destination does not match target');
+ const desired=profile.parse(target);if(!desired.about.trim())throw new Error('Switching to an empty About section is not supported until its presence can be restored');if(destination && JSON.stringify(destination.content)!==JSON.stringify(desired))throw new Error('Destination does not match target');
  return operation.parse({id:crypto.randomUUID(),profileUrl,target:desired,before:original,...(destination?{destination}:{}),...(options.personaId!==undefined?{personaId:options.personaId}:{}),...(options.recoveryOf?{recoveryOf:options.recoveryOf}:{}),sections:{intro:'pending',about:'pending',education:'pending'},status:'running'});
 }
 export function recover(op:Operation):Operation {

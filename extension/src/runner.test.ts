@@ -1,7 +1,7 @@
 import {describe,it,expect,vi} from 'vitest';
 import {createOperation} from './operation';
 import {runOperation,type SectionAdapter} from './runner';
-const content={headline:'',location:'',industry:'',about:'',education:[]};
+const content={headline:'',location:'',industry:'',about:'Original about',education:[]};
 const url='https://www.linkedin.com/in/example/';
 const original={profileUrl:url,capturedAt:'2026-01-01T00:00:00.000Z',content,introDetails:{firstName:'',lastName:'',additionalName:'',pronouns:'',education:'',headline:'',country:'',city:'',industry:''},educationRecordIds:[],educationRecords:[],ownershipVerified:true,introCaptured:true,aboutCaptured:true,educationListCaptured:true};
 const adapter=():SectionAdapter=>({preflight:vi.fn(async()=>{}),submit:vi.fn(async()=>{}),verify:vi.fn(async()=>true)});

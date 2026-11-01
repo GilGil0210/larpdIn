@@ -34,4 +34,4 @@ export const snapshot = z.object({profileUrl:z.string(),capturedAt:z.string().da
 export type Snapshot=z.infer<typeof snapshot>;
 
 /** Captured attachments must not be discarded until their restoration is supported. */
-export function assertRestorable(value:Snapshot):void {const checked=snapshot.parse(value);if(checked.educationRecords.some(record=>record.skills.length||record.media.length))throw new Error('Restoration of education skills or media is not supported yet');}
+export function assertRestorable(value:Snapshot):void {const checked=snapshot.parse(value);if(!checked.content.about.trim())throw new Error('An empty or absent About section cannot yet be restored reliably');if(checked.educationRecords.some(record=>record.skills.length||record.media.length))throw new Error('Restoration of education skills or media is not supported yet');}

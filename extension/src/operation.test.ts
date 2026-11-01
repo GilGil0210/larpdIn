@@ -1,6 +1,6 @@
 import {describe,it,expect} from 'vitest';
 import {createOperation,beginSection,finishSection,recover,snapshot} from './operation';
-const content={headline:'',location:'',industry:'',about:'',education:[]};
+const content={headline:'',location:'',industry:'',about:'Original about',education:[]};
 const original={profileUrl:'https://www.linkedin.com/in/example/',capturedAt:'2026-01-01T00:00:00.000Z',content,introDetails:{firstName:'',lastName:'',additionalName:'',pronouns:'',education:'',headline:'',country:'',city:'',industry:''},educationRecordIds:[],educationRecords:[],ownershipVerified:true,introCaptured:true,aboutCaptured:true,educationListCaptured:true};
 describe('switch recovery',()=>{
  it('blocks incomplete or mismatched snapshots',()=>{expect(()=>snapshot.parse({...original,educationListCaptured:false})).toThrow();expect(()=>createOperation('https://www.linkedin.com/in/other/',content,original)).toThrow()});
@@ -25,3 +25,4 @@ it('reads a running operation without changing its checkpoint', async()=>{
   expect(Object.values(values)).toEqual([op]);
  } finally {Object.assign(globalThis,{chrome:old})}
 });
+it('blocks legacy empty About snapshots and empty targets until section presence can be restored',()=>{const empty={...original,content:{...content,about:''}};expect(()=>createOperation(original.profileUrl,content,empty)).toThrow('absent About');expect(()=>createOperation(original.profileUrl,{...content,about:''},original)).toThrow('empty About')});

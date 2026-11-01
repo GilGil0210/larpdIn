@@ -1,7 +1,7 @@
 import {beforeEach,describe,expect,it,vi} from 'vitest';
 import {createOperation,beginSection,finishSection} from './operation';
 import {saveOriginal,loadHistory,commitSwitch} from './history';
-const content={headline:'',location:'',industry:'',about:'',education:[]};
+const content={headline:'',location:'',industry:'',about:'Original about',education:[]};
 const url='https://www.linkedin.com/in/example/';
 const snap={profileUrl:url,capturedAt:'2026-01-01T00:00:00.000Z',content,introDetails:{firstName:'',lastName:'',additionalName:'',pronouns:'',education:'',headline:'',country:'',city:'',industry:''},educationRecordIds:[],educationRecords:[],ownershipVerified:true as const,introCaptured:true as const,aboutCaptured:true as const,educationListCaptured:true as const};
 const persona='00000000-0000-4000-8000-000000000000';

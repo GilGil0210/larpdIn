@@ -3,7 +3,7 @@ import {planEducation,planEducationRestore,runEducation,type EducationPort} from
 const url='https://www.linkedin.com/in/example/';
 const edu={school:'Old',degree:'',fieldOfStudy:'',startYear:2020,endYear:null,grade:'',activities:'',description:''};
 const record={...edu,id:'old-id',startMonth:null,endMonth:null,skills:[],media:[],attachmentsInspected:true};
-const original={profileUrl:url,capturedAt:'2026-01-01T00:00:00.000Z',content:{headline:'',location:'',industry:'',about:'',education:[edu]},introDetails:{firstName:'',lastName:'',additionalName:'',pronouns:'',education:'',headline:'',country:'',city:'',industry:''},educationRecordIds:['old-id'],educationRecords:[record],ownershipVerified:true as const,introCaptured:true as const,aboutCaptured:true as const,educationListCaptured:true as const};
+const original={profileUrl:url,capturedAt:'2026-01-01T00:00:00.000Z',content:{headline:'',location:'',industry:'',about:'Original about',education:[edu]},introDetails:{firstName:'',lastName:'',additionalName:'',pronouns:'',education:'',headline:'',country:'',city:'',industry:''},educationRecordIds:['old-id'],educationRecords:[record],ownershipVerified:true as const,introCaptured:true as const,aboutCaptured:true as const,educationListCaptured:true as const};
 const target=[{...edu,school:'New',startMonth:null,endMonth:null}];
 const port=():EducationPort=>{let current=[{...edu,startMonth:null,endMonth:null}];return {preflight:vi.fn(async()=>{}),deleteRecord:vi.fn(async()=>{current=[]}),editRecord:vi.fn(async(_id,_before,item)=>{current=[item]}),addRecord:vi.fn(async item=>{current=[...current,item]}),readRecords:vi.fn(async()=>current)}};
 describe('education replacement',()=>{
