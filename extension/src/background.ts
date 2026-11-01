@@ -55,6 +55,7 @@ async function run(input:Command,key:string):Promise<void>{
   let message=result.error||`Switch ${result.status}`;
   if(result.recoveryOf){const reconciliationKey=`reconciliation:${profileKey(input.profileUrl)}:${result.recoveryOf}`;const observation=(await chrome.storage.local.get(reconciliationKey))[reconciliationKey];if(observation?.outcome)message+=`. Previous operation: ${observation.outcome==='unchanged'?'no content changes observed':observation.outcome==='target-content-observed'?'target content observed but not independently verified':'profile changes observed'}`;}
   await chrome.storage.local.set({[key]:{status:result.status==='complete'?'complete':'failed',message,operationId:result.id,finishedAt:new Date().toISOString(),...(result.error?{blocker:classifyBlocker(result.error)}:{})}});
+  if(result.status==='complete')await reloadProfileTabs(input.profileUrl);
  } catch(error){const message=error instanceof Error?error.message:String(error);await chrome.storage.local.set({[key]:{status:'failed',message,finishedAt:new Date().toISOString(),blocker:classifyBlocker(message)}})}
  finally {active.delete(key)}
 }
@@ -65,3 +66,12 @@ chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
  void start(parsed.data).then(()=>sendResponse({ok:true}),error=>sendResponse({ok:false,error:error instanceof Error?error.message:String(error)}));
  return true;
 });
+
+/** Show the applied persona: reload open tabs on the owner's profile (only those, never other pages). */
+async function reloadProfileTabs(profileUrl:string):Promise<void>{
+ try{
+  const slug=new URL(profileUrl).pathname.replace(/\/$/,'').toLowerCase();
+  const tabs=await chrome.tabs.query({url:'https://www.linkedin.com/in/*'});
+  await Promise.all(tabs.filter(tab=>{try{const path=new URL(tab.url||'').pathname.replace(/\/$/,'').toLowerCase();return path===slug||path.startsWith(`${slug}/details/`)}catch{return false}}).map(tab=>tab.id!==undefined?chrome.tabs.reload(tab.id).catch(()=>{}):undefined));
+ }catch{/* Reloading is a convenience; never fail the switch over it. */}
+}

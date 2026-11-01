@@ -92,9 +92,31 @@ let scanCache:{at:number;result:EducationScan}|null=null;
 /** Call around every education write so the next read observes LinkedIn again. */
 export function invalidateEducationScan():void {scanCache=null}
 /** Reuses a scan from the last 30 s; education writes invalidate it. */
-export async function scanEducation(current:Profile,timeoutMs=30000,maxAgeMs=30000):Promise<EducationScan> {
+export async function scanEducation(current:Profile,timeoutMs=30000,maxAgeMs=30000,options:{background?:boolean}={}):Promise<EducationScan> {
  if(scanCache&&Date.now()-scanCache.at<maxAgeMs){const cached=scanCache.result;return {...cached,content:{...current,education:cached.content.education}}}
- const result=await scanEducationUncached(current,timeoutMs);scanCache={at:Date.now(),result};return result;
+ const result=options.background?await scanEducationInBackground(current,timeoutMs):await scanEducationUncached(current,timeoutMs);scanCache={at:Date.now(),result};return result;
+}
+/** Reads one education editor in its own background tab. */
+function makeEditorReader(owner:string,identities:Record<string,string>,timeoutMs:number){return async(link:string)=>{const tab=await chrome.tabs.create({url:link,active:false});if(tab.id===undefined)throw new Error('Could not open education editor');const editorTab=tab.id;try{const result=await readEditorSettled(editorTab,timeoutMs).catch(error=>{throw new Error(`Could not read an education editor: ${error instanceof Error?error.message:String(error)}`)});assertOwner(result.profileUrl,owner);if(new URL(link).pathname!==new URL(`details/education/edit/forms/${result.id}/`,owner).pathname)throw new Error('Unexpected education record');const parsed=education.parse(result.content);return (educationRecord.parse({...parsed,id:result.id,...(identities[result.id]?{schoolIdentity:identities[result.id]}:{}),startMonth:result.startMonth,endMonth:result.endMonth,skills:[],media:[],attachmentsInspected:result.attachmentsInspected}))}finally{await chrome.tabs.remove(editorTab).catch(()=>{})}};}
+/** Self-contained for chrome.scripting: education record IDs listed in the intro form's Education select. Null until the form renders. */
+export function readIntroEducationIds():string[]|null{
+ const root=document.querySelector('dialog[open], [role="dialog"]')??document.querySelector('main')??document.body;
+ const labelOf=(el:Element)=>(el.getAttribute('aria-label')||Array.from((el as HTMLSelectElement).labels??[]).map(l=>{const copy=l.cloneNode(true) as HTMLElement;copy.querySelectorAll('input,textarea,select,button').forEach(x=>x.remove());return copy.textContent||''}).join(' ')).trim().replace(/\s*\*$/,'');
+ const headline=Array.from(root.querySelectorAll('[contenteditable],input,textarea')).some(el=>labelOf(el)==='Headline');if(!headline)return null;
+ const select=Array.from(root.querySelectorAll('select')).find(el=>labelOf(el)==='Education');
+ if(!select)return [];
+ return Array.from(select.options).map(option=>option.value).filter(value=>/^\d+$/.test(value));
+}
+/** Live runs: never activates a tab, so the extension popup stays open. */
+async function scanEducationInBackground(current:Profile,timeoutMs:number):Promise<EducationScan>{
+ const owner=await resolveOwnProfile();
+ const tab=await chrome.tabs.create({url:new URL('edit/intro/',owner).href,active:false});if(tab.id===undefined)throw new Error('Could not open intro editor');const id=tab.id;
+ let ids:string[];try{ids=(await readWhenReady(id,readIntroEducationIds,timeoutMs)) as string[]}finally{await chrome.tabs.remove(id).catch(()=>{})}
+ // No IDs (no education, or a form without the select): fall back to the list page.
+ if(!ids.length)return scanEducationUncached(current,timeoutMs);
+ const readOne=makeEditorReader(owner,{},timeoutMs);
+ const records:z.infer<typeof educationRecord>[]=await Promise.all(ids.map(record=>readOne(new URL(`details/education/edit/forms/${record}/`,owner).href)));
+ return {profileUrl:owner,content:{...current,education:records.map(({school,degree,fieldOfStudy,startYear,endYear,grade,activities,description})=>({school,degree,fieldOfStudy,startYear,endYear,grade,activities,description}))},educationRecords:records,listComplete:true};
 }
 async function scanEducationUncached(current:Profile,timeoutMs:number):Promise<EducationScan> {
  const owner=await resolveOwnProfile();
@@ -113,6 +135,6 @@ async function scanEducationUncached(current:Profile,timeoutMs:number):Promise<E
   }catch(error){lastError=error;prior=null}
   await new Promise(resolve=>setTimeout(resolve,350));}
   if(!links.length&&!listComplete&&lastError){const diagnostics=await chrome.scripting.executeScript({target:{tabId:id},func:educationScanDiagnostics}).catch(()=>[]);throw new Error(`Could not scan education list (${JSON.stringify(diagnostics[0]?.result||{})})`)}
-  const {identities}=await readWhenReady(id,findEducationSchoolIdentities,Math.min(timeoutMs,3000)).catch(()=>({identities:{} as Record<string,string>}));const readOne=async(link:string)=>{const tab=await chrome.tabs.create({url:link,active:false});if(tab.id===undefined)throw new Error('Could not open education editor');const editorTab=tab.id;try{const result=await readEditorSettled(editorTab,timeoutMs).catch(error=>{throw new Error(`Could not read an education editor: ${error instanceof Error?error.message:String(error)}`)});assertOwner(result.profileUrl,owner);if(new URL(link).pathname!==new URL(`details/education/edit/forms/${result.id}/`,owner).pathname)throw new Error('Unexpected education record');const parsed=education.parse(result.content);return (educationRecord.parse({...parsed,id:result.id,...(identities[result.id]?{schoolIdentity:identities[result.id]}:{}),startMonth:result.startMonth,endMonth:result.endMonth,skills:[],media:[],attachmentsInspected:result.attachmentsInspected}))}finally{await chrome.tabs.remove(editorTab).catch(()=>{})}};// Editors render in background tabs, so read them concurrently.
+  const {identities}=await readWhenReady(id,findEducationSchoolIdentities,Math.min(timeoutMs,3000)).catch(()=>({identities:{} as Record<string,string>}));const readOne=makeEditorReader(owner,identities,timeoutMs);// Editors render in background tabs, so read them concurrently.
   const records: z.infer<typeof educationRecord>[]=await Promise.all(links.map(readOne));return {profileUrl:owner,content:{...current,education:records.map(({school,degree,fieldOfStudy,startYear,endYear,grade,activities,description})=>({school,degree,fieldOfStudy,startYear,endYear,grade,activities,description}))},educationRecords:records,listComplete}} finally {await chrome.tabs.remove(id).catch(()=>{});if(previousTab?.id!==undefined)await chrome.tabs.update(previousTab.id,{active:true}).catch(()=>{})}
 }
