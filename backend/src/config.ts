@@ -19,18 +19,9 @@ export type LlmConfig = {
 };
 
 export const PROVIDER_DEFAULTS: Record<LlmProvider, Omit<LlmConfig, "provider" | "apiKey">> = {
-  featherless: {
-    model: "Qwen/Qwen2.5-7B-Instruct",
-    baseUrl: "https://api.featherless.ai/v1",
-    maxTokens: 4096,
-    reasoningEffort: "",
-    jsonMode: false,
-    // Leaves ~30s of the 90s deadline for the Gemini fallback.
-    timeoutMs: 60_000,
-  },
   gemini: {
-    // Alias that Google keeps pointed at the current Flash model.
-    model: "gemini-flash-latest",
+    // Verified for this deployment; override with GEMINI_MODEL.
+    model: "gemini-3.5-flash",
     baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
     // Gemini thinking tokens count against max_tokens, so leave headroom.
     maxTokens: 8192,
@@ -38,22 +29,32 @@ export const PROVIDER_DEFAULTS: Record<LlmProvider, Omit<LlmConfig, "provider" |
     jsonMode: true,
     timeoutMs: null,
   },
+  // Optional, disabled by default; enable with LLM_PROVIDERS=gemini,featherless.
+  featherless: {
+    model: "Qwen/Qwen2.5-7B-Instruct",
+    baseUrl: "https://api.featherless.ai/v1",
+    maxTokens: 4096,
+    reasoningEffort: "",
+    jsonMode: false,
+    // Budget before falling back when it's listed ahead of another provider.
+    timeoutMs: 60_000,
+  },
 };
 
-/** Featherless is primary; Gemini is the fallback. */
-export const DEFAULT_PROVIDER_ORDER: LlmProvider[] = ["featherless", "gemini"];
+/** Gemini is the default and only enabled provider. */
+export const DEFAULT_PROVIDER_ORDER: LlmProvider[] = ["gemini"];
 
 export type Config = {
   port: number;
   host: string;
   /** Configured providers (API key present), in the order they are tried. */
   providers: LlmConfig[];
-  /** After a provider fails (error, timeout, rate limit), skip it for this long. */
+  /** With several providers, skip one for this long after it fails (error, timeout, rate limit). */
   providerCooldownMs: number;
   demoAccessToken: string;
   /** Extra exact origins allowed for CORS, in addition to chrome-extension://*. */
   corsOrigins: string[];
-  /** Total budget for a generate request, including repair and fallback. */
+  /** Total budget for a generate request, including retries, repair and any fallback. */
   generationDeadlineMs: number;
   bodyLimitBytes: number;
   rateLimitPerIpPerMinute: number;
@@ -88,7 +89,7 @@ export function loadProviderConfig(provider: LlmProvider, env: NodeJS.ProcessEnv
   };
 }
 
-/** LLM_PROVIDERS (e.g. "featherless,gemini") sets the order; unknown names are ignored. */
+/** LLM_PROVIDERS (e.g. "gemini" or "gemini,featherless") enables providers in order; unknown names are ignored. */
 export function providerOrder(env: NodeJS.ProcessEnv): LlmProvider[] {
   const raw = str(env.LLM_PROVIDERS);
   if (!raw) return DEFAULT_PROVIDER_ORDER;
@@ -121,7 +122,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   };
 }
 
-/** Required configuration: at least one provider with an API key, plus the demo token. */
+/** Required configuration: at least one enabled provider with an API key, plus the demo token. */
 export function isConfigured(config: Config): boolean {
   return config.providers.length > 0 && config.demoAccessToken.length > 0;
 }

@@ -19,14 +19,12 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
-      # Featherless is primary; Gemini is the fallback when Featherless fails.
-      - key: FEATHERLESS_MODEL
-        value: Qwen/Qwen2.5-7B-Instruct
-      - key: FEATHERLESS_API_KEY
-        sync: false # entered in the Render dashboard on first deploy; never committed
+      # Gemini is the only enabled provider.
+      - key: LLM_PROVIDERS
+        value: gemini
       - key: GEMINI_MODEL
-        value: gemini-flash-latest
+        value: gemini-3.5-flash
       - key: GEMINI_API_KEY
-        sync: false # entered in the Render dashboard on first deploy; never committed
+        sync: false # set in the Render dashboard; never committed
       - key: DEMO_ACCESS_TOKEN
         generateValue: true # Render generates a random token; copy it from the dashboard

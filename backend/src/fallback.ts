@@ -26,7 +26,8 @@ export function createFallbackGenerator(providers: ProviderGenerator[], opts: Fa
   const now = opts.now ?? Date.now;
   const coolingUntil = new Map<string, number>();
 
-  return async (request, signal, log) => {
+  return async (request, signal, context = {}) => {
+    const { log } = context;
     const ready = providers.filter((p) => (coolingUntil.get(p.name) ?? 0) <= now());
     // If everything is cooling down, try them all rather than fail outright.
     const order = ready.length > 0 ? ready : providers;
@@ -37,10 +38,13 @@ export function createFallbackGenerator(providers: ProviderGenerator[], opts: Fa
       if (signal.aborted) throw new UpstreamTimeoutError();
       const next = order[i + 1];
       // The last provider always gets whatever is left of the overall deadline.
-      const attemptSignal =
-        provider.timeoutMs !== null && next ? AbortSignal.any([signal, AbortSignal.timeout(provider.timeoutMs)]) : signal;
+      const budgeted = provider.timeoutMs !== null && next;
+      const attemptSignal = budgeted ? AbortSignal.any([signal, AbortSignal.timeout(provider.timeoutMs!)]) : signal;
+      const deadlineAt = budgeted
+        ? Math.min(context.deadlineAt ?? Infinity, Date.now() + provider.timeoutMs!)
+        : context.deadlineAt;
       try {
-        const result = await withSignal(provider.generate(request, attemptSignal, log), attemptSignal);
+        const result = await withSignal(provider.generate(request, attemptSignal, { log, deadlineAt }), attemptSignal);
         coolingUntil.delete(provider.name);
         log?.info({ provider: provider.name }, "personas generated");
         return result;

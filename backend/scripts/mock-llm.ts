@@ -14,7 +14,7 @@ const mode = process.env.MOCK_MODE ?? "ok";
 createServer((req, res) => {
   if (req.method === "GET" && req.url === "/v1/models") {
     res.writeHead(200, { "Content-Type": "application/json" });
-    return res.end(JSON.stringify({ data: [{ id: "models/gemini-flash-latest" }] }));
+    return res.end(JSON.stringify({ data: [{ id: "models/gemini-3.5-flash" }] }));
   }
   if (req.method !== "POST" || req.url !== "/v1/chat/completions") {
     res.writeHead(404).end();
