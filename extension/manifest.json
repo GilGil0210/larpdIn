@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Larpdin",
+  "version": "0.1.0",
+  "permissions": [
+    "storage",
+    "sidePanel",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://www.linkedin.com/*",
+    "https://larpdin-backend.onrender.com/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "side_panel": {
+    "default_path": "index.html"
+  },
+  "action": {
+    "default_title": "Open Larpdin"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "optional_host_permissions": [
+    "https://*/*"
+  ]
+}

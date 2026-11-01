@@ -23,7 +23,7 @@ Errors have the shape `{ "error": { "code": "...", "message": "..." } }`:
 | Status | Code | When | Suggested UI message |
 | --- | --- | --- | --- |
 | 400 | `INVALID_INPUT` | Bad JSON, a missing or extra field, wrong types, an empty brief, a field over its limit, or a body over 32 KB | Show `message`; the user can fix the brief or draft |
-| 401 | `UNAUTHORIZED` | Missing or wrong bearer token (checked before the body is read or Gemini is called) | "Your access token isn't valid. Check it in Settings." |
+| 401 | `UNAUTHORIZED` | Bearer token missing or wrong when optional authentication is enabled | "Your access token isn't valid. Check it in Settings." |
 | 429 | `RATE_LIMITED` | Over 10 requests/min from one IP, over 60 generations/hour in total, or Gemini still rate-limited after retries. Includes a `Retry-After` header in seconds | "Too many requests. Try again in N seconds." |
 | 502 | `GENERATION_FAILED` | Gemini returned an error after retries, or the output was still invalid after one repair attempt | "Generation is unavailable right now. Your brief is saved; try again." |
 | 503 | `SERVICE_UNAVAILABLE` | The server is missing required configuration | "The service isn't set up yet." |
@@ -39,7 +39,7 @@ Validation input limits: headline 220 characters, about 2600, brief 2000, educat
 - **Brief requirements:** the model first lists the brief's concrete requirements, as a profile field plus the text it must contain (for example location → "Toronto", school → "University of Toronto"). The server checks every persona against that list, ignoring case, accents and spacing. As a backstop, a single school named in the brief must appear in every persona's education, even if the model forgot to list it. The requirements list is internal and never returned.
 - **Repair:** any problem above triggers one repair request that lists the problems. If the repaired output still fails, the API returns 502.
 - **Retries:** network errors and Gemini HTTP 408/429/5xx are retried up to twice per call. A `Retry-After` header is honoured; otherwise the wait is exponential backoff with jitter (about 0.5–1 s, then 1–2 s). A retry only starts if at least 5 seconds will remain before the 90-second deadline; otherwise the error is returned immediately. Auth and input errors (400/401/403/404) are never retried. Retries and the single repair all share the 90-second deadline.
-- **Rate limits:** the per-IP limit counts every generate request, including unauthorized ones, which slows down token guessing. The global hourly limit only counts authorized, valid requests, so bad requests can't use up the demo quota. Both limits are kept in memory, so the service must run as a single instance.
+- **Rate limits:** the per-IP limit counts every generate request, including invalid ones. The global hourly limit only counts valid requests, so bad requests can't use up the demo quota. Both limits are kept in memory, so the service must run as a single instance.
 - **CORS:** allowed for any `chrome-extension://<id>` origin, plus the exact origins listed in `CORS_ORIGINS`. Preflight requests for `Authorization` are answered without authentication.
 - **Privacy:** nothing is stored. Logs contain only the method, URL, status and timing, plus error types, retry counts and HTTP statuses. Request bodies, prompts, model output, tokens and keys are never logged, and JSON parse errors are never echoed back. A test checks this.
 
