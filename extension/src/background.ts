@@ -4,6 +4,7 @@ import {executeSwitch,restoreInterrupted,type Selection} from './switchCoordinat
 import {liveSwitch} from './liveSwitch';
 import {loadOperation} from './operation';
 import {classifyBlocker} from './blockers';
+import {reconcileWorkerJobs} from './workerRecovery';
 
 chrome.sidePanel.setPanelBehavior({openPanelOnActionClick:true});
 const restricted=Promise.all([chrome.storage.session.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'}),chrome.storage.local.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'})]);
@@ -18,11 +19,7 @@ const jobKey=(url:string)=>`switch-job:${profileKey(url)}`;
 // A new worker cannot know whether an old submission reached LinkedIn. Never replay it.
 const initialized=(async()=>{
  await restricted;
- const all=await chrome.storage.local.get(null);
- for(const [key,value] of Object.entries(all)){
-  if(key.startsWith('switch-job:') && value?.status==='running')
-   await chrome.storage.local.set({[key]:{...value,status:'interrupted',message:'The background worker stopped. Recover from a fresh scan; a submission will not be replayed.'}});
- }
+ await reconcileWorkerJobs();
 })();
 async function start(input:Command):Promise<void>{
  await initialized;

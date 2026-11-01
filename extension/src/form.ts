@@ -8,7 +8,7 @@ function labelOf(el:TextControl):string {
  if(labelled){const text=labelled.split(/\s+/).map(id=>el.ownerDocument.getElementById(id)?.textContent?.trim() ?? '').join(' ').trim();if(text)return text;}
  return Array.from(('labels' in el?el.labels:null) ?? []).map(label=>{const copy=label.cloneNode(true) as HTMLElement;copy.querySelectorAll('input,textarea,select,button').forEach(child=>child.remove());return copy.textContent?.trim() ?? '';}).join(' ').trim();
 }
-const normalize=(s:string)=>s.replace(/\s+/g,' ').replace(/\s*\*\s*$/,'').trim().toLowerCase();
+const normalize=(s:string)=>s.replace(/\s+/g,' ').replace(/,\s*maximum\s+[\d,]+\s+characters?\s*$/i,'').replace(/\s*\*\s*$/,'').trim().toLowerCase();
 export function findField(root:ParentNode,label:string):TextControl {
  const matches=Array.from(root.querySelectorAll<TextControl>('input,textarea,select,[contenteditable="true"][role="textbox"]')).filter(el=>(!('disabled' in el)||!el.disabled) && (!('type' in el)||el.type!=='hidden') && normalize(labelOf(el))===normalize(label));
  if(matches.length!==1) throw new Error(`Expected one ${label} field, found ${matches.length}`);

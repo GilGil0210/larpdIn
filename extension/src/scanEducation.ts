@@ -45,7 +45,7 @@ export function readEducationEditor(){
  if(url.origin!=='https://www.linkedin.com'||!path)throw new Error('Expected an education editor');
  const root=document.querySelector('dialog[open], [role="dialog"]')??document.querySelector('main')??document.body;
  const fields=Array.from(root.querySelectorAll<HTMLInputElement|HTMLTextAreaElement>('input,textarea')).filter(el=>el.type!=='hidden');
- const field=(name:string)=>{const found=fields.filter(el=>{const label=el.getAttribute('aria-label')||Array.from(el.labels??[]).map(l=>{const copy=l.cloneNode(true) as HTMLElement;copy.querySelectorAll('input,textarea,select').forEach(x=>x.remove());return copy.textContent?.trim()||''}).join(' ');return label.replace(/\s*\*\s*$/,'').trim().toLowerCase()===name.toLowerCase()});if(found.length!==1)throw new Error(`Expected one ${name} field, found ${found.length}`);return found[0].value};
+ const field=(name:string)=>{const found=fields.filter(el=>{const label=el.getAttribute('aria-label')||Array.from(el.labels??[]).map(l=>{const copy=l.cloneNode(true) as HTMLElement;copy.querySelectorAll('input,textarea,select').forEach(x=>x.remove());return copy.textContent?.trim()||''}).join(' ');return label.replace(/,\s*maximum\s+[\d,]+\s+characters?\s*$/i,'').replace(/\s*\*\s*$/,'').trim().toLowerCase()===name.toLowerCase()});if(found.length!==1)throw new Error(`Expected one ${name} field, found ${found.length}`);return found[0].value};
  const selects=Array.from(root.querySelectorAll<HTMLSelectElement>('select'));
  if(selects.length!==4)throw new Error(`Expected four education date controls, found ${selects.length}`);
  const kinds=['month','year','month','year'];

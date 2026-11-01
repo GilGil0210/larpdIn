@@ -8,3 +8,4 @@ describe('form matching',()=>{
 });
 
 it('reads and changes a uniquely labelled editable textbox',()=>{document.body.innerHTML='<div role="textbox" contenteditable="true" aria-label="Headline">Old</div>';const field=findField(document,'Headline');expect(fieldValue(field)).toBe('Old');setText(field,'New');expect(fieldValue(field)).toBe('New')});
+it('recognizes LinkedIn length hints without accepting a different label',()=>{document.body.innerHTML='<input aria-label="Grade, maximum 80 characters"><textarea aria-label="Description, maximum 1,000 characters"></textarea>';expect(findField(document,'Grade')).toBeTruthy();expect(findField(document,'Description')).toBeTruthy();expect(()=>findField(document,'Grade, maximum')).toThrow()});

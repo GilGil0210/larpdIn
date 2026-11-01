@@ -15,3 +15,9 @@ describe('education replacement',()=>{
 });
 
 it('builds a restore target with captured months',()=>{const destination={...original,educationRecords:[{...record,startMonth:9,endMonth:6}]};const {target,plan}=planEducationRestore('restore',original,destination);expect(target[0]).toMatchObject({startMonth:9,endMonth:6});expect(plan.steps[0]).toMatchObject({kind:'edit',record:{startMonth:9,endMonth:6}})});
+it('does not declare completion when LinkedIn returns the same records in a different order',async()=>{
+ const first={...edu,startMonth:null,endMonth:null},second={...first,school:'Second'};
+ const two={...original,content:{...original.content,education:[edu,{...edu,school:'Second'}]},educationRecordIds:['old-id','two'],educationRecords:[record,{...record,id:'two',school:'Second'}]};
+ const api:EducationPort={preflight:async()=>{},editRecord:async()=>{},deleteRecord:async()=>{},addRecord:async()=>{},readRecords:async()=>[second,first]};
+ const result=await runEducation(planEducation('op',url,two,[first,second]),two,[first,second],api,async()=>{});expect(result.status).toBe('uncertain');expect(result.error).toContain('order');
+});

@@ -1,6 +1,7 @@
 import {createOperation,loadOperation,persistOperation,recover,type Operation,type Section} from './operation';
 import {loadHistory,saveOriginal,commitSwitch,commitRestore} from './history';
 import {profileKey} from './storage';
+import {interruptEducationProgress} from './educationProgress';
 import {snapshot,type Snapshot} from './snapshot';
 import {runOperation,type SectionAdapter} from './runner';
 import {candidate} from './contract';
@@ -41,6 +42,7 @@ export async function restoreInterrupted(profileUrl:string,deps:SwitchDependenci
   // The profile lock ensures no switch in this runtime is still executing.
   // Record uncertainty before attempting a fresh capture.
   if(previous.status==='running'){previous=recover(previous);await persistOperation(previous)}
+  await interruptEducationProgress(profileUrl,previous.id);
   const history=await loadHistory(profileUrl);if(!history)throw new Error('Original snapshot is missing');
   const current=snapshot.parse(await deps.capture(profileUrl));
   if(profileKey(current.profileUrl)!==profileKey(profileUrl))throw new Error('Captured profile does not match the requested profile');

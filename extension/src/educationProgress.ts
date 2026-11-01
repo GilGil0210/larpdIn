@@ -11,3 +11,9 @@ const key=(url:string,id:string)=>`education-progress:${profileKey(url)}:${z.str
 export async function persistEducationProgress(raw:EducationProgress):Promise<void>{const value=progressSchema.parse(raw);await chrome.storage.local.set({[key(value.profileUrl,value.operationId)]:value})}
 /** Observing a checkpoint must never change the running operation. */
 export async function loadEducationProgress(url:string,id:string):Promise<EducationProgress|null>{const storageKey=key(url,id);const data=await chrome.storage.local.get(storageKey);if(!data[storageKey])return null;const value=progressSchema.parse(data[storageKey]);if(profileKey(value.profileUrl)!==profileKey(url)||value.operationId!==id)throw new Error('Education checkpoint belongs to a different operation');return value}
+/** Only call while holding the profile lock, after the prior executor has stopped. */
+export async function interruptEducationProgress(url:string,id:string):Promise<EducationProgress|null>{
+ const current=await loadEducationProgress(url,id);if(!current||current.status!=='running')return current;
+ const interrupted:EducationProgress={...current,status:'uncertain',error:current.error||'Interrupted before verification'};
+ await persistEducationProgress(interrupted);return interrupted;
+}
