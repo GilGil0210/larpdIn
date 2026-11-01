@@ -44,7 +44,7 @@ export async function prepareEducation(root:ParentNode,raw:Education,dates:DateC
   if(options.length!==1) throw new Error(`Expected one date option ${label}, found ${options.length}`);
  }
  // School must be selected from LinkedIn's suggestions; free text is not proof of a valid school.
- await selectAutocomplete(school,record.school);
+ if(fieldValue(school)!==record.school)await selectAutocomplete(school,record.school);
  setText(degree,record.degree);setText(field,record.fieldOfStudy);setText(grade,record.grade);setText(activities,record.activities);setText(description,record.description);
  for(const [control,label] of desired) selectOption(control,label);
 }
