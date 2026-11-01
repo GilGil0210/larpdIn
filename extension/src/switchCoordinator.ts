@@ -79,3 +79,18 @@ export async function dismissFailedOperation(profileUrl:string,lock:<T>(name:str
   await chrome.storage.local.remove(`operation:${profileKey(profileUrl)}`);
  });
 }
+
+/** Demo UI: clear a finished-but-unsuccessful switch (failed or interrupted) so the next Apply can start. Never touches a running one. */
+export async function dismissStuckOperation(profileUrl:string,lock:<T>(name:string,work:()=>Promise<T>)=>Promise<T>=browserLock):Promise<boolean>{
+ return await lock(`larpdin:${profileKey(profileUrl)}`,async()=>{
+  const jobKey=`switch-job:${profileKey(profileUrl)}`;
+  const job=(await chrome.storage.local.get(jobKey))[jobKey] as {status?:string}|undefined;
+  if(job?.status==='running')return false;
+  const previous=await loadOperation(profileUrl);
+  if(!previous||!['failed','interrupted'].includes(previous.status))return false;
+  await chrome.storage.local.set({[`operation-archive:${profileKey(profileUrl)}:${previous.id}`]:previous});
+  await chrome.storage.local.remove(`operation:${profileKey(profileUrl)}`);
+  if(job?.status==='interrupted')await chrome.storage.local.set({[jobKey]:{status:'failed',message:'Previous switch was cleared'}});
+  return true;
+ });
+}
