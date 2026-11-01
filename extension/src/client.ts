@@ -30,9 +30,9 @@ export function createClient():LarpdinClient {
  async function emit(){const value=await state();listeners.forEach(fn=>fn(value))}
  async function connected(){const s=await state();if(!s.connectedProfile)throw Error('Connect your LinkedIn profile first');return s.connectedProfile}
  async function switchCommand(selection:object){const profileUrl=await connected();const result=await chrome.runtime.sendMessage({type:'start-switch',profileUrl,selection});if(!result?.ok)throw Error(result?.error||'Unable to start switch')}
- const storageListener=()=>{void emit()};chrome.storage.onChanged.addListener(storageListener);
+ const storageListener=()=>{void emit()};
  return {
-  getState:state,subscribe(fn){listeners.add(fn);void state().then(fn);return()=>listeners.delete(fn)},
+  getState:state,subscribe(fn){if(listeners.size===0)chrome.storage.onChanged.addListener(storageListener);listeners.add(fn);void state().then(value=>{if(listeners.has(fn))fn(value)});return()=>{listeners.delete(fn);if(listeners.size===0)chrome.storage.onChanged.removeListener(storageListener)}},
   async saveSettings(settings){const url=new URL(settings.backendUrl);if(url.protocol!=='https:'&&!(url.protocol==='http:'&&['localhost','127.0.0.1'].includes(url.hostname)))throw Error('Backend must use HTTPS');if(url.username||url.password||url.search||url.hash)throw Error('Invalid backend URL');const origin=`${url.protocol}//${url.hostname}/*`;if(!await chrome.permissions.contains({origins:[origin]})&&!await chrome.permissions.request({origins:[origin]}))throw Error('Backend access was not granted');await chrome.storage.local.set({backendUrl:url.href.replace(/\/$/,'')});if(settings.token!==undefined)await chrome.storage.session.set({token:settings.token})},
   async checkConnection(){const s=await state();const response=await fetch(new URL('/health',s.settings.backendUrl),{redirect:'error'});if(!response.ok)throw Error(`Backend unavailable (HTTP ${response.status})`)},
   async connectProfile(){const url=await resolveOwnProfile();await chrome.storage.local.set({connectedProfile:url})},
