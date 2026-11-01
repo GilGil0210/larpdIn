@@ -10,8 +10,16 @@ export function findSummaryEditor():string {
  const prefix=`/in/${root[1]}/edit/forms/summary/`;
  const links=Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href]')).map(a=>{try{return new URL(a.href)}catch{return null}}).filter((url):url is URL=>!!url && url.origin===here.origin && url.pathname.startsWith(prefix));
  const unique=[...new Set(links.map(x=>x.origin+x.pathname))];
- if(unique.length!==1) throw new Error(`Expected one About editor, found ${unique.length}`);
- return unique[0];
+ const existing=unique.filter(link=>!new URL(link).pathname.endsWith('/new/'));
+ if(existing.length===1)return existing[0];
+ if(existing.length>1||unique.length>1)throw new Error('About editor is ambiguous');
+ if(unique.length===1)return unique[0];
+ // LinkedIn may omit the Add About suggestion. Only use the create route once
+ // the owner profile has loaded and no existing About heading is visible.
+ const intro=Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href]')).some(link=>{try{const u=new URL(link.href);return u.origin===here.origin&&u.pathname.replace(/\/$/,'')===`/in/${root[1]}/edit/intro`}catch{return false}});
+ const hasAbout=Array.from(document.querySelectorAll('main h1,main h2,main h3,main [role=heading]')).some(el=>(el.textContent||'').trim().toLowerCase()==='about');
+ if(!intro||hasAbout)throw new Error('About editor is not yet available');
+ return `${here.origin}${prefix}new/`;
 }
 export function importAbout(inspection:ReturnType<typeof inspectLinkedInForm>,owner:string,current:Profile):Profile {
  const url=new URL(inspection.url);const match=url.pathname.match(/^\/in\/([^/]+)\/edit\/forms\/summary\/[^/]+\/?$/);
